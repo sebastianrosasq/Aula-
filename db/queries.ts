@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, count, desc, eq, gte, inArray, isNull, ne, or } from "drizzle-orm";
 import { getDb } from "@/db";
+import type { CourseCatalogItem, CourseRole } from "@/lib/course-types";
 import {
   alerts,
   attendanceRecords,
@@ -273,6 +274,173 @@ export async function getStudentOverview(studentId: string) {
       achievedCompetencies: progress.filter((item) => item.level === "AD" || item.level === "A").length,
     },
   };
+}
+
+async function getEnrollmentCounts(classroomIds: string[]) {
+  if (!classroomIds.length) return new Map<string, number>();
+  const db = getDb();
+  const rows = await db
+    .select({ classroomId: enrollments.classroomId, total: count() })
+    .from(enrollments)
+    .where(and(inArray(enrollments.classroomId, classroomIds), eq(enrollments.active, true)))
+    .groupBy(enrollments.classroomId);
+  return new Map(rows.map((row) => [row.classroomId, row.total]));
+}
+
+export async function getCourseCatalog(user: {
+  id: string;
+  institutionId: string;
+  role: CourseRole;
+}): Promise<CourseCatalogItem[]> {
+  const db = getDb();
+
+  if (user.role === "docente" || user.role === "admin") {
+    const conditions = [
+      eq(teacherAssignments.active, true),
+      eq(classrooms.active, true),
+      eq(subjects.active, true),
+    ];
+    if (user.role === "docente") conditions.push(eq(teacherAssignments.teacherId, user.id));
+    if (user.role === "admin") conditions.push(eq(classrooms.institutionId, user.institutionId));
+
+    const rows = await db
+      .select({
+        assignmentId: teacherAssignments.id,
+        classroomId: classrooms.id,
+        classroomName: classrooms.name,
+        grade: classrooms.grade,
+        section: classrooms.section,
+        subjectName: subjects.name,
+        subjectColor: subjects.color,
+        teacherFirstName: users.firstName,
+        teacherLastName: users.lastName,
+      })
+      .from(teacherAssignments)
+      .innerJoin(classrooms, eq(classrooms.id, teacherAssignments.classroomId))
+      .innerJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
+      .innerJoin(users, eq(users.id, teacherAssignments.teacherId))
+      .where(and(...conditions));
+    const counts = await getEnrollmentCounts([...new Set(rows.map((row) => row.classroomId))]);
+    return rows.map((row) => ({
+      ...row,
+      teacherName: `${row.teacherFirstName} ${row.teacherLastName}`,
+      studentsCount: counts.get(row.classroomId) ?? 0,
+    }));
+  }
+
+  if (user.role === "estudiante") {
+    const [rows, resultRows] = await Promise.all([
+      db
+        .select({
+          assignmentId: teacherAssignments.id,
+          classroomId: classrooms.id,
+          classroomName: classrooms.name,
+          grade: classrooms.grade,
+          section: classrooms.section,
+          subjectName: subjects.name,
+          subjectColor: subjects.color,
+          teacherFirstName: users.firstName,
+          teacherLastName: users.lastName,
+        })
+        .from(enrollments)
+        .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
+        .innerJoin(
+          teacherAssignments,
+          and(
+            eq(teacherAssignments.classroomId, classrooms.id),
+            eq(teacherAssignments.active, true),
+          ),
+        )
+        .innerJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
+        .innerJoin(users, eq(users.id, teacherAssignments.teacherId))
+        .where(and(eq(enrollments.studentId, user.id), eq(enrollments.active, true))),
+      db
+        .select({ assignmentId: evaluations.assignmentId, level: competencyResults.level })
+        .from(competencyResults)
+        .innerJoin(evaluations, eq(evaluations.id, competencyResults.evaluationId))
+        .where(eq(competencyResults.studentId, user.id))
+        .orderBy(desc(competencyResults.updatedAt)),
+    ]);
+    const levels = new Map<string, "AD" | "A" | "B" | "C">();
+    resultRows.forEach((row) => {
+      if (!levels.has(row.assignmentId)) levels.set(row.assignmentId, row.level);
+    });
+    return rows.map((row) => ({
+      ...row,
+      teacherName: `${row.teacherFirstName} ${row.teacherLastName}`,
+      studentsCount: 0,
+      latestLevel: levels.get(row.assignmentId) ?? null,
+    }));
+  }
+
+  const [rows, linkedChildren] = await Promise.all([
+    db
+      .select({
+        assignmentId: teacherAssignments.id,
+        classroomId: classrooms.id,
+        classroomName: classrooms.name,
+        grade: classrooms.grade,
+        section: classrooms.section,
+        subjectName: subjects.name,
+        subjectColor: subjects.color,
+        studentId: guardianStudents.studentId,
+        teacherFirstName: users.firstName,
+        teacherLastName: users.lastName,
+      })
+      .from(guardianStudents)
+      .innerJoin(studentProfiles, eq(studentProfiles.userId, guardianStudents.studentId))
+      .innerJoin(
+        enrollments,
+        and(eq(enrollments.studentId, guardianStudents.studentId), eq(enrollments.active, true)),
+      )
+      .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
+      .innerJoin(
+        teacherAssignments,
+        and(
+          eq(teacherAssignments.classroomId, classrooms.id),
+          eq(teacherAssignments.active, true),
+        ),
+      )
+      .innerJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
+      .innerJoin(users, eq(users.id, teacherAssignments.teacherId))
+      .where(and(eq(guardianStudents.guardianId, user.id), eq(classrooms.active, true))),
+    db
+      .select({ studentId: guardianStudents.studentId })
+      .from(guardianStudents)
+      .where(eq(guardianStudents.guardianId, user.id)),
+  ]);
+  const childIds = linkedChildren.map((child) => child.studentId);
+  const resultRows = childIds.length
+    ? await db
+        .select({
+          studentId: competencyResults.studentId,
+          assignmentId: evaluations.assignmentId,
+          level: competencyResults.level,
+        })
+        .from(competencyResults)
+        .innerJoin(evaluations, eq(evaluations.id, competencyResults.evaluationId))
+        .where(inArray(competencyResults.studentId, childIds))
+        .orderBy(desc(competencyResults.updatedAt))
+    : [];
+  const levels = new Map<string, "AD" | "A" | "B" | "C">();
+  resultRows.forEach((row) => {
+    const key = `${row.studentId}:${row.assignmentId}`;
+    if (!levels.has(key)) levels.set(key, row.level);
+  });
+  const counts = await getEnrollmentCounts([...new Set(rows.map((row) => row.classroomId))]);
+  const studentNames = await db
+    .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+    .from(users)
+    .where(childIds.length ? inArray(users.id, childIds) : eq(users.id, ""));
+  const names = new Map(studentNames.map((student) => [student.id, `${student.firstName} ${student.lastName}`]));
+
+  return rows.map((row) => ({
+    ...row,
+    studentName: names.get(row.studentId) ?? "Estudiante",
+    teacherName: `${row.teacherFirstName} ${row.teacherLastName}`,
+    studentsCount: counts.get(row.classroomId) ?? 0,
+    latestLevel: levels.get(`${row.studentId}:${row.assignmentId}`) ?? null,
+  }));
 }
 
 export async function getAdminOverview(institutionId: string) {

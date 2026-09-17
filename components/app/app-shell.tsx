@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LogOut, Menu, X } from "lucide-react";
+import { BookOpenCheck, LogOut, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { SessionUser } from "@/lib/auth";
@@ -51,6 +51,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         </button>
         <nav className={"app-nav " + (menuOpen ? "open" : "")} aria-label="Navegación del sistema">
           <Link href="/panel">Inicio</Link>
+          <Link href="/panel/cursos"><BookOpenCheck size={15} /> Cursos</Link>
           <Link href="/panel/mensajes">Mensajes</Link>
           {user.role === "admin" ? <Link href="/panel/administracion">Administración</Link> : null}
         </nav>

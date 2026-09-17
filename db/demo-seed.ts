@@ -124,19 +124,35 @@ for (const [classIndex, classroom] of classrooms.entries()) {
     const teacherRef = teacherId.get(key)!;
     assignmentByClassSubject.set(`${classroom.id}:${key}`, { id: assignmentId, teacherId: teacherRef, subjectId: subjectRef });
     await db.insert(schema.teacherAssignments).values({ id: assignmentId, teacherId: teacherRef, classroomId: classroom.id, subjectId: subjectRef, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
-    if (!original) await db.insert(schema.scheduleSlots).values({ id: id(2000 + classIndex * 16 + subjectIndex), assignmentId, dayOfWeek: (subjectIndex % 5) + 1, startsAt: `${String(8 + (subjectIndex % 5)).padStart(2, "0")}:00:00`, endsAt: `${String(9 + (subjectIndex % 5)).padStart(2, "0")}:00:00`, room: `Aula ${classroom.name}` }).onDuplicateKeyUpdate({ set: { room: `Aula ${classroom.name}` } });
+    if (!original) {
+      const lessonDay = (classIndex % 5) + 1;
+      const lessonHour = 8 + Math.floor(classIndex / 5);
+      const startsAt = `${String(lessonHour).padStart(2, "0")}:00:00`;
+      const endsAt = `${String(lessonHour + 1).padStart(2, "0")}:00:00`;
+      await db.insert(schema.scheduleSlots).values({ id: id(2000 + classIndex * 16 + subjectIndex), assignmentId, dayOfWeek: lessonDay, startsAt, endsAt, room: `Aula ${classroom.name}` }).onDuplicateKeyUpdate({ set: { dayOfWeek: lessonDay, startsAt, endsAt, room: `Aula ${classroom.name}` } });
+    }
     subjectIndex += 1;
   }
 }
 
 let studentIndex = 0;
-for (const classroom of classrooms) {
-  const key = classroom.stage === "primaria" ? "comunicacion" : "matematica";
-  const assignment = assignmentByClassSubject.get(`${classroom.id}:${key}`)!;
-  const competencyId = key === "comunicacion" ? root.competency : id(401);
+for (const [classIndex, classroom] of classrooms.entries()) {
+  const courseSubjects = subjects
+    .map((subject, subjectIndex) => ({ subject, subjectIndex }))
+    .filter(({ subject }) => (subject[4] as readonly string[]).includes(classroom.stage));
+  const assessmentBySubject = new Map<string, { evaluationId: string; assignmentId: string; competencyId: string; teacherId: string; subjectName: string }>();
+  for (const { subject, subjectIndex } of courseSubjects) {
+    const [key, subjectName] = subject;
+    const assignment = assignmentByClassSubject.get(`${classroom.id}:${key}`)!;
+    const originalEvaluation = classroom.id === root.classroom && key === "comunicacion";
+    const evaluationId = originalEvaluation ? root.evaluation : id(11000 + classIndex * 16 + subjectIndex);
+    const competencyId = key === "comunicacion" ? root.competency : id(400 + subjectIndex);
+    await db.insert(schema.evaluations).values({ id: evaluationId, assignmentId: assignment.id, competencyId, title: originalEvaluation ? "Comprensión lectora" : `Actividad inicial · ${subjectName}`, evaluationDate: today, createdById: assignment.teacherId }).onDuplicateKeyUpdate({ set: { title: originalEvaluation ? "Comprensión lectora" : `Actividad inicial · ${subjectName}`, evaluationDate: today } });
+    assessmentBySubject.set(key, { evaluationId, assignmentId: assignment.id, competencyId, teacherId: assignment.teacherId, subjectName });
+  }
+  const attendanceCourseKey = classroom.stage === "primaria" ? "comunicacion" : "matematica";
+  const attendanceCourse = assessmentBySubject.get(attendanceCourseKey)!;
   const originalClass = classroom.id === root.classroom;
-  const evaluationId = originalClass ? root.evaluation : id(3000 + classrooms.indexOf(classroom));
-  await db.insert(schema.evaluations).values({ id: evaluationId, assignmentId: assignment.id, competencyId, title: originalClass ? "Comprensión lectora" : `Actividad diagnóstica de ${classroom.name}`, evaluationDate: today, createdById: assignment.teacherId }).onDuplicateKeyUpdate({ set: { evaluationDate: today } });
   for (let seat = 0; seat < 3; seat += 1) {
     const original = originalClass && seat === 0;
     const currentStudentId = original ? root.student : id(5000 + studentIndex);
@@ -151,8 +167,14 @@ for (const classroom of classrooms) {
     await db.insert(schema.guardianProfiles).values({ userId: currentGuardianId }).onDuplicateKeyUpdate({ set: { phone: null } });
     await db.insert(schema.enrollments).values({ id: original ? root.enrollment : id(7000 + studentIndex), studentId: currentStudentId, classroomId: classroom.id, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
     await db.insert(schema.guardianStudents).values({ id: original ? root.guardianStudent : id(8000 + studentIndex), guardianId: currentGuardianId, studentId: currentStudentId, relationship: studentIndex % 2 ? "Padre" : "Madre", primaryContact: true }).onDuplicateKeyUpdate({ set: { primaryContact: true } });
-    await db.insert(schema.competencyResults).values({ id: original ? root.result : id(9000 + studentIndex), evaluationId, studentId: currentStudentId, level: (["AD", "A", "A", "B", "C"] as const)[studentIndex % 5], observation: "Registro de demostración para seguimiento de aprendizaje." }).onDuplicateKeyUpdate({ set: { observation: "Registro de demostración para seguimiento de aprendizaje." } });
-    await db.insert(schema.attendanceRecords).values({ id: original ? root.attendance : id(10000 + studentIndex), classroomId: classroom.id, studentId: currentStudentId, recordedById: assignment.teacherId, attendanceDate: today, status: (["presente", "presente", "tardanza", "presente", "ausente"] as const)[studentIndex % 5] }).onDuplicateKeyUpdate({ set: { status: "presente" } });
+    for (const { subject, subjectIndex } of courseSubjects) {
+      const [key] = subject;
+      const assessment = assessmentBySubject.get(key)!;
+      const isOriginalResult = original && key === "comunicacion";
+      const resultId = isOriginalResult ? root.result : key === attendanceCourseKey ? id(9000 + studentIndex) : id(12000 + studentIndex * 16 + subjectIndex);
+      await db.insert(schema.competencyResults).values({ id: resultId, evaluationId: assessment.evaluationId, studentId: currentStudentId, level: (["AD", "A", "A", "B", "C"] as const)[(studentIndex + subjectIndex) % 5], observation: `Registro de demostración para ${assessment.subjectName}.` }).onDuplicateKeyUpdate({ set: { observation: `Registro de demostración para ${assessment.subjectName}.` } });
+    }
+    await db.insert(schema.attendanceRecords).values({ id: original ? root.attendance : id(10000 + studentIndex), classroomId: classroom.id, studentId: currentStudentId, recordedById: attendanceCourse.teacherId, attendanceDate: today, status: (["presente", "presente", "tardanza", "presente", "ausente"] as const)[studentIndex % 5] }).onDuplicateKeyUpdate({ set: { status: "presente" } });
     studentIndex += 1;
   }
 }
