@@ -8,12 +8,15 @@ import * as schema from "./schema";
 
 config({ path: ".env.local" });
 
-if (process.env.NODE_ENV === "production") {
-  throw new Error("Las cuentas de demostración no se pueden crear en producción.");
+if (process.env.NODE_ENV === "production" && process.env.SEED_DEMO_DATA !== "true") {
+  throw new Error("Para crear datos de demostración en producción define SEED_DEMO_DATA=true de forma temporal.");
 }
 
-for (const key of ["DATABASE_HOST", "DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_NAME"] as const) {
-  if (!process.env[key]) throw new Error(`${key} no está configurado en .env.local.`);
+const connectionUrl = process.env.DATABASE_URL ?? process.env.MYSQL_URL;
+if (!connectionUrl) {
+  for (const key of ["DATABASE_HOST", "DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_NAME"] as const) {
+    if (!process.env[key]) throw new Error(`${key} no está configurado en .env.local.`);
+  }
 }
 
 const root = {
@@ -36,13 +39,15 @@ const root = {
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, "0")}`;
 const password = "AulaEnlace2026!";
 const year = 2026;
-const pool = mysql.createPool({
-  host: process.env.DATABASE_HOST,
-  port: Number(process.env.DATABASE_PORT ?? 3306),
-  user: process.env.DATABASE_USER,
-  password: process.env.DATABASE_PASSWORD,
-  database: process.env.DATABASE_NAME,
-});
+const pool = connectionUrl
+  ? mysql.createPool(connectionUrl)
+  : mysql.createPool({
+      host: process.env.DATABASE_HOST,
+      port: Number(process.env.DATABASE_PORT ?? 3306),
+      user: process.env.DATABASE_USER,
+      password: process.env.DATABASE_PASSWORD,
+      database: process.env.DATABASE_NAME,
+    });
 const db = drizzle(pool, { schema, mode: "default" });
 const passwordHash = await hash(password, 12);
 const today = new Intl.DateTimeFormat("en-CA", {

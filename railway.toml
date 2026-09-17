@@ -3,6 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "npm run build"
 
 [deploy]
+preDeployCommand = "npm run db:push && if [ \"$SEED_DEMO_DATA\" = \"true\" ]; then npm run db:demo; fi"
 startCommand = "npx next start -p $PORT"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120

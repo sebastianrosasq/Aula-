@@ -16,6 +16,9 @@ const globalForDb = globalThis as unknown as {
 };
 
 function readConfig() {
+  const connectionUrl = process.env.DATABASE_URL ?? process.env.MYSQL_URL;
+  if (connectionUrl) return connectionUrl;
+
   const host = process.env.DATABASE_HOST;
   const user = process.env.DATABASE_USER;
   const password = process.env.DATABASE_PASSWORD;
@@ -23,7 +26,7 @@ function readConfig() {
 
   if (!host || !user || !password || !database) {
     throw new Error(
-      "La base de datos no está configurada. Define DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD y DATABASE_NAME.",
+      "La base de datos no está configurada. Define DATABASE_URL o las variables DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD y DATABASE_NAME.",
     );
   }
 
@@ -34,14 +37,16 @@ export function getDb() {
   if (globalForDb.aulaEnlaceDb) return globalForDb.aulaEnlaceDb;
 
   const config = readConfig();
-  const pool = mysql.createPool({
-    ...config,
-    port: Number(process.env.DATABASE_PORT ?? 3306),
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    enableKeepAlive: true,
-  });
+  const pool = typeof config === "string"
+    ? mysql.createPool(config)
+    : mysql.createPool({
+        ...config,
+        port: Number(process.env.DATABASE_PORT ?? 3306),
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        enableKeepAlive: true,
+      });
 
   const db = createDatabase(pool);
   globalForDb.aulaEnlacePool = pool;

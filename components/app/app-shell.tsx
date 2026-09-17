@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { BookOpenCheck, LogOut, Menu, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { SessionUser } from "@/lib/auth";
 import { roleLabels } from "@/lib/permissions";
 
@@ -12,6 +12,10 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+
+  const isActive = (href: string) =>
+    href === "/panel" ? pathname === href : pathname.startsWith(href);
 
   async function logout() {
     if (loggingOut) return;
@@ -50,10 +54,10 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
           {menuOpen ? <X /> : <Menu />}
         </button>
         <nav className={"app-nav " + (menuOpen ? "open" : "")} aria-label="Navegación del sistema">
-          <Link href="/panel">Inicio</Link>
-          <Link href="/panel/cursos"><BookOpenCheck size={15} /> Cursos</Link>
-          <Link href="/panel/mensajes">Mensajes</Link>
-          {user.role === "admin" ? <Link href="/panel/administracion">Administración</Link> : null}
+          <Link className={isActive("/panel") ? "active" : ""} href="/panel" onClick={() => setMenuOpen(false)}>Inicio</Link>
+          <Link className={isActive("/panel/cursos") ? "active" : ""} href="/panel/cursos" onClick={() => setMenuOpen(false)}><BookOpenCheck size={15} /> Cursos</Link>
+          <Link className={isActive("/panel/mensajes") ? "active" : ""} href="/panel/mensajes" onClick={() => setMenuOpen(false)}>Mensajes</Link>
+          {user.role === "admin" ? <Link className={isActive("/panel/administracion") ? "active" : ""} href="/panel/administracion" onClick={() => setMenuOpen(false)}>Administración</Link> : null}
         </nav>
         <div className="app-user-menu">
           <span className="app-role">{roleLabels[user.role]}</span>

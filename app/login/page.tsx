@@ -11,18 +11,16 @@ export default async function LoginPage() {
   return (
     <main className="auth-page">
       <section className="auth-layout">
-        <div className="auth-intro">
-          <div className="auth-brand">
+        <section className="auth-card" aria-labelledby="login-title">
+          <div className="auth-brand auth-brand--login">
             <span className="auth-brand__icon">
               <GraduationCap size={22} />
             </span>
             <span>Aula+</span>
           </div>
-        </div>
-        <section className="auth-card" aria-labelledby="login-title">
           <p className="eyebrow">Iniciar sesión</p>
-          <h2 id="login-title">Bienvenido</h2>
-          <p className="auth-card__intro">Ingresa con tu correo institucional.</p>
+          <h1 id="login-title">Bienvenido</h1>
+          <p className="auth-card__intro">Ingresa a tu espacio educativo.</p>
           <LoginForm />
           <p className="auth-security">
             <ShieldCheck size={15} /> Tus datos están protegidos.
