@@ -8,12 +8,27 @@ import { roleLabels } from "@/lib/permissions";
 
 export function AppShell({ user, children }: { user: SessionUser; children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
 
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.replace("/login");
-    router.refresh();
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setLogoutError(null);
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok) {
+        setLogoutError("No se pudo cerrar la sesión. Inténtalo nuevamente.");
+        return;
+      }
+      router.replace("/login");
+      router.refresh();
+    } catch {
+      setLogoutError("No se pudo conectar para cerrar la sesión. Inténtalo nuevamente.");
+    } finally {
+      setLoggingOut(false);
+    }
   }
 
   const initials = (user.firstName[0] ?? "").concat(user.lastName[0] ?? "").toUpperCase();
@@ -23,7 +38,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
       <header className="app-header">
         <a href="/panel" className="app-brand">
           <span>A</span>
-          <strong>AulaEnlace</strong>
+          <strong>Aula+</strong>
         </a>
         <button
           className="app-menu-toggle"
@@ -43,11 +58,12 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
           <span className="app-avatar" aria-hidden="true">
             {initials}
           </span>
-          <button className="logout-button" type="button" onClick={logout}>
+          <button className="logout-button" type="button" onClick={logout} disabled={loggingOut}>
             <LogOut /> <span>Salir</span>
           </button>
         </div>
       </header>
+      {logoutError ? <p className="app-shell-notice" role="alert">{logoutError}</p> : null}
       <main className="app-main">{children}</main>
     </div>
   );

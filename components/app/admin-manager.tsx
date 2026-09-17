@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { Building2, KeyRound, UserPlus, UserRoundCog } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type Member = {
   id: string;
@@ -22,6 +23,7 @@ const roleNames = {
   estudiante: "Estudiante",
   padre: "Familia",
 };
+type Notice = { kind: "success" | "error"; message: string };
 
 export function AdminManager({
   institution,
@@ -32,25 +34,37 @@ export function AdminManager({
   members: Member[];
   currentUserId: string;
 }) {
-  const [notice, setNotice] = useState<string | null>(null);
+  const router = useRouter();
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function submit(endpoint: string, method: "POST" | "PATCH", payload: unknown) {
+    if (saving) return false;
     setSaving(true);
     setNotice(null);
-    const response = await fetch(endpoint, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    setSaving(false);
-    if (!response.ok) {
-      setNotice(body.error ?? "No se pudo guardar el cambio.");
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        setNotice({ kind: "error", message: body.error ?? "No se pudo guardar el cambio." });
+        return false;
+      }
+      setNotice({ kind: "success", message: "Cambios guardados correctamente." });
+      router.refresh();
+      return true;
+    } catch {
+      setNotice({
+        kind: "error",
+        message: "No se pudo conectar para guardar los cambios. Revisa tu conexión e inténtalo nuevamente.",
+      });
       return false;
+    } finally {
+      setSaving(false);
     }
-    window.location.reload();
-    return true;
   }
 
   async function saveInstitution(event: FormEvent<HTMLFormElement>) {
@@ -98,7 +112,7 @@ export function AdminManager({
           </div>
           <Building2 />
         </div>
-        <form className="admin-form" onSubmit={saveInstitution}>
+        <form className="admin-form" noValidate onSubmit={saveInstitution}>
           <label>
             Nombre
             <input name="name" defaultValue={institution?.name} required maxLength={180} />
@@ -125,7 +139,7 @@ export function AdminManager({
           </div>
           <UserPlus />
         </div>
-        <form className="admin-form" onSubmit={createUser}>
+        <form className="admin-form" noValidate onSubmit={createUser}>
           <div className="admin-form__grid">
             <label>
               Nombres
@@ -168,8 +182,8 @@ export function AdminManager({
           <UserRoundCog />
         </div>
         {notice ? (
-          <p className="attendance-feedback error" role="alert">
-            {notice}
+          <p className={"attendance-feedback " + notice.kind} role={notice.kind === "error" ? "alert" : "status"}>
+            {notice.message}
           </p>
         ) : null}
         <div className="member-list">

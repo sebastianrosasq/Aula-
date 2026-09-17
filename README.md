@@ -1,4 +1,4 @@
-# AulaEnlace
+# Aula+
 
 Aplicación educativa con paneles diferenciados para administración, docentes, estudiantes y familias. La información académica se guarda en MySQL; el navegador no usa LocalStorage para datos institucionales.
 

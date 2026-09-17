@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AulaEnlace",
+  title: "Aula+",
   description: "Gestión académica y comunicación escolar.",
   icons: {
     icon: "/favicon.svg",

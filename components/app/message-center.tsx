@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { MessageSquareText, Send } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type Recipient = { id: string; firstName: string; lastName: string; role: string };
 type Message = {
@@ -13,6 +14,7 @@ type Message = {
   readAt: Date | null;
   createdAt: Date;
 };
+type Feedback = { kind: "success" | "error"; message: string };
 
 export function MessageCenter({
   currentUserId,
@@ -23,28 +25,52 @@ export function MessageCenter({
   recipients: Recipient[];
   messages: Message[];
 }) {
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const router = useRouter();
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [sending, setSending] = useState(false);
 
-  async function onSubmit(formData: FormData) {
-    setSending(true);
-    setFeedback(null);
-    const response = await fetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        recipientId: formData.get("recipientId"),
-        subject: formData.get("subject"),
-        body: formData.get("body"),
-      }),
-    });
-    const body = (await response.json().catch(() => ({}))) as { error?: string };
-    setSending(false);
-    if (!response.ok) {
-      setFeedback(body.error ?? "No se pudo enviar el mensaje.");
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (sending) return;
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const subject = String(formData.get("subject") ?? "").trim();
+    const bodyText = String(formData.get("body") ?? "").trim();
+    if (!formData.get("recipientId") || subject.length < 3 || bodyText.length < 3) {
+      setFeedback({
+        kind: "error",
+        message: "Selecciona un destinatario y escribe un asunto y mensaje de al menos 3 caracteres.",
+      });
       return;
     }
-    window.location.reload();
+    setSending(true);
+    setFeedback(null);
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientId: formData.get("recipientId"),
+          subject,
+          body: bodyText,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        setFeedback({ kind: "error", message: body.error ?? "No se pudo enviar el mensaje." });
+        return;
+      }
+      form.reset();
+      setFeedback({ kind: "success", message: "Mensaje enviado correctamente." });
+      router.refresh();
+    } catch {
+      setFeedback({
+        kind: "error",
+        message: "No se pudo conectar para enviar el mensaje. Revisa tu conexión e inténtalo nuevamente.",
+      });
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -58,7 +84,7 @@ export function MessageCenter({
           </div>
         </div>
         {recipients.length ? (
-          <form action={onSubmit} className="compose-form">
+          <form className="compose-form" noValidate onSubmit={onSubmit} aria-busy={sending}>
             <label>
               Destinatario
               <select name="recipientId" required defaultValue="">
@@ -81,8 +107,8 @@ export function MessageCenter({
               <textarea name="body" rows={6} maxLength={3000} required />
             </label>
             {feedback ? (
-              <p className="attendance-feedback error" role="alert">
-                {feedback}
+              <p className={"attendance-feedback " + feedback.kind} role={feedback.kind === "error" ? "alert" : "status"}>
+                {feedback.message}
               </p>
             ) : null}
             <button className="app-primary-button" type="submit" disabled={sending}>

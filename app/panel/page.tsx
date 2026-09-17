@@ -28,7 +28,7 @@ function DatabaseUnavailable() {
       <div>
         <AlertCircle size={30} />
         <p className="eyebrow">Configuración pendiente</p>
-        <h1>Conecta MySQL para iniciar AulaEnlace.</h1>
+        <h1>Conecta MySQL para iniciar Aula+.</h1>
         <p>
           Crea un archivo <code>.env.local</code> a partir de <code>.env.example</code>, aplica las
           migraciones y vuelve a iniciar sesión.

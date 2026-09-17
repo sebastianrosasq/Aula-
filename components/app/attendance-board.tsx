@@ -11,6 +11,7 @@ type Student = {
   status: AttendanceStatus | null;
   note: string | null;
 };
+type Feedback = { kind: "success" | "error"; message: string };
 
 export function AttendanceBoard({
   classroomId,
@@ -28,7 +29,7 @@ export function AttendanceBoard({
   );
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const visibleStudents = useMemo(
     () =>
       students.filter((student) =>
@@ -51,36 +52,49 @@ export function AttendanceBoard({
   }
 
   async function save() {
+    if (saving) return;
     setSaving(true);
     setFeedback(null);
-    const response = await fetch("/api/attendance", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        classroomId,
-        date,
-        records: students.map((student) => ({
-          studentId: student.studentId,
-          status: records.get(student.studentId) ?? "presente",
-        })),
-      }),
-    });
-    const body = (await response.json().catch(() => ({}))) as {
-      error?: string;
-      saved?: number;
-      notificationsCreated?: number;
-    };
-    setSaving(false);
-    setFeedback(
-      response.ok
-        ? "Asistencia guardada para " +
-            body.saved +
-            " estudiantes." +
-            (body.notificationsCreated
-              ? " Se notificó a " + body.notificationsCreated + " familia(s)."
-              : "")
-        : (body.error ?? "No se pudo guardar la asistencia."),
-    );
+    try {
+      const response = await fetch("/api/attendance", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classroomId,
+          date,
+          records: students.map((student) => ({
+            studentId: student.studentId,
+            status: records.get(student.studentId) ?? "presente",
+          })),
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        saved?: number;
+        notificationsCreated?: number;
+      };
+      setFeedback(
+        response.ok
+          ? {
+              kind: "success",
+              message:
+                "Asistencia guardada para " +
+                body.saved +
+                " estudiantes." +
+                (body.notificationsCreated
+                  ? " Se notificó a " + body.notificationsCreated + " familia(s)."
+                  : ""),
+            }
+          : { kind: "error", message: body.error ?? "No se pudo guardar la asistencia." },
+      );
+    } catch {
+      setFeedback({
+        kind: "error",
+        message: "No se pudo conectar para guardar la asistencia. Revisa tu conexión e inténtalo nuevamente.",
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -124,11 +138,11 @@ export function AttendanceBoard({
       {feedback ? (
         <p
           className={
-            "attendance-feedback " + (feedback.startsWith("Asistencia") ? "success" : "error")
+            "attendance-feedback " + feedback.kind
           }
-          role="status"
+          role={feedback.kind === "error" ? "alert" : "status"}
         >
-          {feedback}
+          {feedback.message}
         </p>
       ) : null}
       <div className="attendance-list">
