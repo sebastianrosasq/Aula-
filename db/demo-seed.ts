@@ -111,6 +111,25 @@ for (const [index, subject] of subjects.entries()) {
   await db.insert(schema.competencies).values({ id: key === "comunicacion" ? root.competency : id(400 + index), subjectId: currentSubjectId, name: competency, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
 }
 
+// En una escuela un docente puede asumir más de un área. Esta matriz mantiene
+// cada curso conectado a un responsable real, sin duplicar secciones ni cuentas.
+const teacherBySubject: Record<string, string> = {
+  comunicacion: "comunicacion",
+  personal: "comunicacion",
+  matematica: "matematica",
+  ciencia: "matematica",
+  arte: "arte",
+  fisica: "arte",
+  ingles: "ingles",
+  religion: "ingles",
+  sociales: "sociales",
+  dpcc: "sociales",
+  trabajo: "trabajo",
+};
+for (const [subjectKey, teacherKey] of Object.entries(teacherBySubject)) {
+  teacherId.set(subjectKey, teacherId.get(teacherKey)!);
+}
+
 const assignmentByClassSubject = new Map<string, { id: string; teacherId: string; subjectId: string }>();
 for (const [classIndex, classroom] of classrooms.entries()) {
   await db.insert(schema.classrooms).values({ id: classroom.id, institutionId: root.institution, name: classroom.name, grade: classroom.grade, section: classroom.section, academicYear: year, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
@@ -123,7 +142,7 @@ for (const [classIndex, classroom] of classrooms.entries()) {
     const subjectRef = subjectId.get(key)!;
     const teacherRef = teacherId.get(key)!;
     assignmentByClassSubject.set(`${classroom.id}:${key}`, { id: assignmentId, teacherId: teacherRef, subjectId: subjectRef });
-    await db.insert(schema.teacherAssignments).values({ id: assignmentId, teacherId: teacherRef, classroomId: classroom.id, subjectId: subjectRef, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
+    await db.insert(schema.teacherAssignments).values({ id: assignmentId, teacherId: teacherRef, classroomId: classroom.id, subjectId: subjectRef, active: true }).onDuplicateKeyUpdate({ set: { teacherId: teacherRef, active: true } });
     if (!original) {
       const lessonDay = (classIndex % 5) + 1;
       const lessonHour = 8 + Math.floor(classIndex / 5);
@@ -147,7 +166,7 @@ for (const [classIndex, classroom] of classrooms.entries()) {
     const originalEvaluation = classroom.id === root.classroom && key === "comunicacion";
     const evaluationId = originalEvaluation ? root.evaluation : id(11000 + classIndex * 16 + subjectIndex);
     const competencyId = key === "comunicacion" ? root.competency : id(400 + subjectIndex);
-    await db.insert(schema.evaluations).values({ id: evaluationId, assignmentId: assignment.id, competencyId, title: originalEvaluation ? "Comprensión lectora" : `Actividad inicial · ${subjectName}`, evaluationDate: today, createdById: assignment.teacherId }).onDuplicateKeyUpdate({ set: { title: originalEvaluation ? "Comprensión lectora" : `Actividad inicial · ${subjectName}`, evaluationDate: today } });
+    await db.insert(schema.evaluations).values({ id: evaluationId, assignmentId: assignment.id, competencyId, title: originalEvaluation ? "Comprensión lectora" : `Actividad inicial · ${subjectName}`, evaluationDate: today, createdById: assignment.teacherId }).onDuplicateKeyUpdate({ set: { createdById: assignment.teacherId, title: originalEvaluation ? "Comprensión lectora" : `Actividad inicial · ${subjectName}`, evaluationDate: today } });
     assessmentBySubject.set(key, { evaluationId, assignmentId: assignment.id, competencyId, teacherId: assignment.teacherId, subjectName });
   }
   const attendanceCourseKey = classroom.stage === "primaria" ? "comunicacion" : "matematica";
