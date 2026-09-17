@@ -2,6 +2,7 @@ import { config } from "dotenv";
 import { hash } from "bcryptjs";
 import mysql from "mysql2/promise";
 import { drizzle } from "drizzle-orm/mysql2";
+import { inArray } from "drizzle-orm";
 
 import * as schema from "./schema";
 
@@ -76,7 +77,7 @@ const guardianNames = ["Rosa", "Carlos", "Mónica", "Juan", "Patricia", "Miguel"
 
 type Classroom = { id: string; stage: "primaria" | "secundaria"; grade: string; section: "A" | "B"; name: string };
 const classrooms: Classroom[] = (["primaria", "secundaria"] as const).flatMap((stage) =>
-  Array.from({ length: 6 }, (_, number) =>
+  Array.from({ length: stage === "primaria" ? 6 : 5 }, (_, number) =>
     (["A", "B"] as const).map((section) => {
       const grade = number + 1;
       const existing = stage === "primaria" && grade === 5 && section === "B";
@@ -88,6 +89,11 @@ const classrooms: Classroom[] = (["primaria", "secundaria"] as const).flatMap((s
 );
 
 await db.insert(schema.institutions).values({ id: root.institution, name: "Institución Demo Aula+", modularCode: "DEMO-2026" }).onDuplicateKeyUpdate({ set: { name: "Institución Demo Aula+", active: true } });
+const retiredClassroomIds = [id(122), id(123)];
+const retiredUserIds = [...Array.from({ length: 6 }, (_, index) => id(5066 + index)), ...Array.from({ length: 6 }, (_, index) => id(6066 + index))];
+await db.update(schema.classrooms).set({ active: false }).where(inArray(schema.classrooms.id, retiredClassroomIds));
+await db.update(schema.enrollments).set({ active: false }).where(inArray(schema.enrollments.classroomId, retiredClassroomIds));
+await db.update(schema.users).set({ active: false }).where(inArray(schema.users.id, retiredUserIds));
 await db.insert(schema.users).values({ id: root.admin, institutionId: root.institution, email: "admin@aulaenlace.demo", passwordHash, role: "admin", firstName: "Andrea", lastName: "Ramos", active: true }).onDuplicateKeyUpdate({ set: { passwordHash, active: true } });
 
 const subjectId = new Map<string, string>();

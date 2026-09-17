@@ -280,11 +280,13 @@ export async function getAdminOverview(institutionId: string) {
   const [userCount] = await db
     .select({ total: count() })
     .from(users)
-    .where(eq(users.institutionId, institutionId));
+    .where(and(eq(users.institutionId, institutionId), eq(users.active, true)));
   const [classroomCount] = await db
     .select({ total: count() })
     .from(classrooms)
-    .where(eq(classrooms.institutionId, institutionId));
+    .where(
+      and(eq(classrooms.institutionId, institutionId), eq(classrooms.active, true)),
+    );
   const [unreadNotifications] = await db
     .select({ total: count() })
     .from(notifications)
@@ -354,7 +356,7 @@ export async function getAllowedMessageRecipients(user: {
 }) {
   const db = getDb();
   if (user.role === "admin") {
-    return db
+    const members = await db
       .select({
         id: users.id,
         firstName: users.firstName,
@@ -370,15 +372,16 @@ export async function getAllowedMessageRecipients(user: {
         ),
       )
       .orderBy(users.lastName, users.firstName);
+    return members.map((member) => ({ ...member, context: "Cuenta de la institución" }));
   }
 
   if (user.role === "docente") {
-    const guardians = await db
+    const links = await db
       .select({
-        id: users.id,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        role: users.role,
+        guardianId: guardianStudents.guardianId,
+        studentFirstName: users.firstName,
+        studentLastName: users.lastName,
+        classroomName: classrooms.name,
       })
       .from(teacherAssignments)
       .innerJoin(
@@ -389,15 +392,27 @@ export async function getAllowedMessageRecipients(user: {
         ),
       )
       .innerJoin(guardianStudents, eq(guardianStudents.studentId, enrollments.studentId))
-      .innerJoin(users, eq(users.id, guardianStudents.guardianId))
+      .innerJoin(users, eq(users.id, enrollments.studentId))
+      .innerJoin(classrooms, eq(classrooms.id, teacherAssignments.classroomId))
       .where(
         and(
           eq(teacherAssignments.teacherId, user.id),
           eq(teacherAssignments.active, true),
-          eq(users.active, true),
         ),
       );
-    return uniqueRecipients(guardians);
+    const guardianIds = [...new Set(links.map((link) => link.guardianId))];
+    if (!guardianIds.length) return [];
+    const guardians = await db
+      .select({ id: users.id, firstName: users.firstName, lastName: users.lastName, role: users.role })
+      .from(users)
+      .where(and(inArray(users.id, guardianIds), eq(users.active, true)));
+    const contextByGuardian = new Map(
+      links.map((link) => [
+        link.guardianId,
+        `Familiar de ${link.studentFirstName} ${link.studentLastName} · ${link.classroomName}`,
+      ]),
+    );
+    return guardians.map((guardian) => ({ ...guardian, context: contextByGuardian.get(guardian.id) }));
   }
 
   if (user.role === "estudiante") {
@@ -407,9 +422,13 @@ export async function getAllowedMessageRecipients(user: {
         firstName: users.firstName,
         lastName: users.lastName,
         role: users.role,
+        subjectName: subjects.name,
+        classroomName: classrooms.name,
       })
       .from(teacherAssignments)
       .innerJoin(users, eq(users.id, teacherAssignments.teacherId))
+      .innerJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
+      .innerJoin(classrooms, eq(classrooms.id, teacherAssignments.classroomId))
       .innerJoin(
         enrollments,
         and(
@@ -424,7 +443,12 @@ export async function getAllowedMessageRecipients(user: {
           eq(users.active, true),
         ),
       );
-    return uniqueRecipients(teachers);
+    return uniqueRecipients(
+      teachers.map(({ subjectName, classroomName, ...teacher }) => ({
+        ...teacher,
+        context: `${subjectName} · ${classroomName}`,
+      })),
+    );
   }
 
   const childRows = await db
@@ -439,9 +463,13 @@ export async function getAllowedMessageRecipients(user: {
       firstName: users.firstName,
       lastName: users.lastName,
       role: users.role,
+      subjectName: subjects.name,
+      classroomName: classrooms.name,
     })
     .from(teacherAssignments)
     .innerJoin(users, eq(users.id, teacherAssignments.teacherId))
+    .innerJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
+    .innerJoin(classrooms, eq(classrooms.id, teacherAssignments.classroomId))
     .innerJoin(
       enrollments,
       and(
@@ -457,7 +485,12 @@ export async function getAllowedMessageRecipients(user: {
       ),
     );
 
-  return uniqueRecipients(linkedTeachers);
+  return uniqueRecipients(
+    linkedTeachers.map(({ subjectName, classroomName, ...teacher }) => ({
+      ...teacher,
+      context: `${subjectName} · ${classroomName}`,
+    })),
+  );
 }
 
 function uniqueRecipients<T extends { id: string }>(items: T[]) {

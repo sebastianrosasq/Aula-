@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { MessageSquareText, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-type Recipient = { id: string; firstName: string; lastName: string; role: string };
+type Recipient = { id: string; firstName: string; lastName: string; role: string; context?: string | null };
 type Message = {
   id: string;
   senderId: string;
@@ -93,7 +93,7 @@ export function MessageCenter({
                 </option>
                 {recipients.map((recipient) => (
                   <option key={recipient.id} value={recipient.id}>
-                    {recipient.lastName}, {recipient.firstName} · {recipient.role}
+                    {recipient.lastName}, {recipient.firstName} · {recipient.context || recipient.role}
                   </option>
                 ))}
               </select>
