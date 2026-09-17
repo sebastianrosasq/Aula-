@@ -13,6 +13,10 @@ type Message = {
   body: string;
   readAt: Date | null;
   createdAt: Date;
+  senderName: string;
+  senderLastName: string;
+  recipientName: string;
+  recipientLastName: string;
 };
 type Feedback = { kind: "success" | "error"; message: string };
 
@@ -141,7 +145,11 @@ export function MessageCenter({
                 key={message.id}
                 className={message.senderId === currentUserId ? "sent" : "received"}
               >
-                <span>{message.senderId === currentUserId ? "Enviado" : "Recibido"}</span>
+                <span>
+                  {message.senderId === currentUserId
+                    ? `Para ${message.recipientName} ${message.recipientLastName}`
+                    : `De ${message.senderName} ${message.senderLastName}`}
+                </span>
                 <strong>{message.subject}</strong>
                 <p>{message.body}</p>
                 <small>{new Date(message.createdAt).toLocaleString("es-PE")}</small>

@@ -1,6 +1,7 @@
 import "server-only";
 
-import { and, count, desc, eq, gte, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, gte, inArray, isNull, ne, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { getDb } from "@/db";
 import type { CourseCatalogItem, CourseRole } from "@/lib/course-types";
 import {
@@ -77,8 +78,8 @@ export async function getTeacherContext(teacherId: string) {
       .filter((slot) => slot.startsAt > now.time)
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0] ?? null;
 
-  const [pendingConclusions] = await db
-    .select({ total: count() })
+  const [studentScope] = await db
+    .select({ total: countDistinct(enrollments.studentId) })
     .from(enrollments)
     .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
     .innerJoin(teacherAssignments, eq(teacherAssignments.classroomId, classrooms.id))
@@ -87,7 +88,7 @@ export async function getTeacherContext(teacherId: string) {
   return {
     currentClass,
     nextClass,
-    pendingConclusions: pendingConclusions?.total ?? 0,
+    studentsInScope: studentScope?.total ?? 0,
     date: now.date,
   };
 }
@@ -470,7 +471,8 @@ export async function getAdminOverview(institutionId: string) {
 
 export async function getAdminManagement(institutionId: string) {
   const db = getDb();
-  const [institution] = await db
+  const [institutionRows, members, classroomOptions, studentOptions] = await Promise.all([
+    db
     .select({
       id: institutions.id,
       name: institutions.name,
@@ -479,9 +481,8 @@ export async function getAdminManagement(institutionId: string) {
     })
     .from(institutions)
     .where(eq(institutions.id, institutionId))
-    .limit(1);
-
-  const members = await db
+    .limit(1),
+    db
     .select({
       id: users.id,
       email: users.email,
@@ -494,13 +495,26 @@ export async function getAdminManagement(institutionId: string) {
     })
     .from(users)
     .where(eq(users.institutionId, institutionId))
-    .orderBy(users.lastName, users.firstName);
+    .orderBy(users.lastName, users.firstName),
+    db
+      .select({ id: classrooms.id, name: classrooms.name })
+      .from(classrooms)
+      .where(and(eq(classrooms.institutionId, institutionId), eq(classrooms.active, true)))
+      .orderBy(classrooms.name),
+    db
+      .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+      .from(users)
+      .where(and(eq(users.institutionId, institutionId), eq(users.role, "estudiante"), eq(users.active, true)))
+      .orderBy(users.lastName, users.firstName),
+  ]);
 
-  return { institution, members };
+  return { institution: institutionRows[0], members, classroomOptions, studentOptions };
 }
 
 export async function getMessageCenter(userId: string) {
   const db = getDb();
+  const sender = alias(users, "message_sender");
+  const recipient = alias(users, "message_recipient");
   return db
     .select({
       id: messages.id,
@@ -510,11 +524,42 @@ export async function getMessageCenter(userId: string) {
       body: messages.body,
       readAt: messages.readAt,
       createdAt: messages.createdAt,
+      senderName: sender.firstName,
+      senderLastName: sender.lastName,
+      recipientName: recipient.firstName,
+      recipientLastName: recipient.lastName,
     })
     .from(messages)
+    .innerJoin(sender, eq(sender.id, messages.senderId))
+    .innerJoin(recipient, eq(recipient.id, messages.recipientId))
     .where(or(eq(messages.senderId, userId), eq(messages.recipientId, userId)))
     .orderBy(desc(messages.createdAt))
     .limit(40);
+}
+
+export async function getTeacherProgress(teacherId: string) {
+  const db = getDb();
+  return db
+    .select({
+      resultId: competencyResults.id,
+      assignmentId: teacherAssignments.id,
+      subjectName: subjects.name,
+      classroomName: classrooms.name,
+      studentId: competencyResults.studentId,
+      studentFirstName: users.firstName,
+      studentLastName: users.lastName,
+      evaluationTitle: evaluations.title,
+      level: competencyResults.level,
+      observation: competencyResults.observation,
+    })
+    .from(competencyResults)
+    .innerJoin(evaluations, eq(evaluations.id, competencyResults.evaluationId))
+    .innerJoin(teacherAssignments, eq(teacherAssignments.id, evaluations.assignmentId))
+    .innerJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
+    .innerJoin(classrooms, eq(classrooms.id, teacherAssignments.classroomId))
+    .innerJoin(users, eq(users.id, competencyResults.studentId))
+    .where(and(eq(teacherAssignments.teacherId, teacherId), eq(teacherAssignments.active, true)))
+    .orderBy(subjects.name, classrooms.name, users.lastName, users.firstName);
 }
 
 export async function getAllowedMessageRecipients(user: {

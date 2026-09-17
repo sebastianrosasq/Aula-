@@ -37,6 +37,8 @@ export default async function AdministrationPage() {
       <AdminManager
         institution={management.institution}
         members={management.members}
+        classrooms={management.classroomOptions}
+        students={management.studentOptions}
         currentUserId={user.id}
       />
     </AppShell>

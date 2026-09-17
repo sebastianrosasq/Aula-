@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app/app-shell";
 import { CourseCatalog } from "@/components/app/course-catalog";
-import { getCourseCatalog } from "@/db/queries";
+import { TeacherProgressManager } from "@/components/app/teacher-progress-manager";
+import { getCourseCatalog, getTeacherProgress } from "@/db/queries";
 import { getSessionUser, type SessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -25,10 +26,14 @@ export default async function CoursesPage() {
   }
   if (!user) redirect("/login");
 
-  const courses = await getCourseCatalog(user);
+  const [courses, teacherProgress] = await Promise.all([
+    getCourseCatalog(user),
+    user.role === "docente" ? getTeacherProgress(user.id) : Promise.resolve([]),
+  ]);
   return (
     <AppShell user={user}>
       <CourseCatalog role={user.role} courses={courses} />
+      {user.role === "docente" ? <TeacherProgressManager initialRows={teacherProgress} /> : null}
     </AppShell>
   );
 }

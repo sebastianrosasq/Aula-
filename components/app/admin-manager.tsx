@@ -28,16 +28,21 @@ type Notice = { kind: "success" | "error"; message: string };
 export function AdminManager({
   institution,
   members,
+  classrooms,
+  students,
   currentUserId,
 }: {
   institution: Institution;
   members: Member[];
+  classrooms: Array<{ id: string; name: string }>;
+  students: Array<{ id: string; firstName: string; lastName: string }>;
   currentUserId: string;
 }) {
   const router = useRouter();
   const [notice, setNotice] = useState<Notice | null>(null);
   const [saving, setSaving] = useState(false);
   const [memberQuery, setMemberQuery] = useState("");
+  const [newRole, setNewRole] = useState<"docente" | "estudiante" | "padre">("docente");
   const visibleMembers = useMemo(() => {
     const query = memberQuery.trim().toLocaleLowerCase("es-PE");
     if (!query) return members.slice(0, 60);
@@ -95,6 +100,8 @@ export function AdminManager({
       lastName: data.get("lastName"),
       role: data.get("role"),
       temporaryPassword: data.get("temporaryPassword"),
+      classroomId: data.get("classroomId") || undefined,
+      linkedStudentId: data.get("linkedStudentId") || undefined,
     });
     if (created) event.currentTarget.reset();
   }
@@ -166,12 +173,30 @@ export function AdminManager({
           </label>
           <label>
             Rol
-            <select name="role" defaultValue="docente">
+            <select name="role" value={newRole} onChange={(event) => setNewRole(event.target.value as typeof newRole)}>
               <option value="docente">Docente</option>
               <option value="estudiante">Estudiante</option>
               <option value="padre">Familia</option>
             </select>
           </label>
+          {newRole === "estudiante" ? (
+            <label>
+              Aula y sección
+              <select name="classroomId" required defaultValue="">
+                <option value="" disabled>Selecciona un aula</option>
+                {classrooms.map((classroom) => <option key={classroom.id} value={classroom.id}>{classroom.name}</option>)}
+              </select>
+            </label>
+          ) : null}
+          {newRole === "padre" ? (
+            <label>
+              Estudiante vinculado
+              <select name="linkedStudentId" required defaultValue="">
+                <option value="" disabled>Selecciona un estudiante</option>
+                {students.map((student) => <option key={student.id} value={student.id}>{student.lastName}, {student.firstName}</option>)}
+              </select>
+            </label>
+          ) : null}
           <label>
             Contraseña temporal
             <input name="temporaryPassword" type="password" minLength={10} required />

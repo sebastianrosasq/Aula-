@@ -49,18 +49,21 @@ function Welcome({ user }: { user: SessionUser }) {
   };
   return (
     <header className="dashboard-welcome">
-      <p className="eyebrow">
-        Panel de{" "}
-        {user.role === "docente"
-          ? "docencia"
-          : user.role === "padre"
-            ? "familia"
-            : user.role === "estudiante"
-              ? "estudiante"
-              : "administración"}
-      </p>
-      <h1>Hola, {firstName}.</h1>
-      <p>{greeting[user.role]}</p>
+      <div className="profile-welcome-avatar" aria-hidden="true">{user.firstName[0]}{user.lastName[0]}</div>
+      <div>
+        <p className="eyebrow">
+          Panel de{" "}
+          {user.role === "docente"
+            ? "docencia"
+            : user.role === "padre"
+              ? "familia"
+              : user.role === "estudiante"
+                ? "estudiante"
+                : "administración"}
+        </p>
+        <h1>Hola, {firstName}.</h1>
+        <p>{greeting[user.role]}</p>
+      </div>
     </header>
   );
 }
@@ -120,8 +123,8 @@ async function TeacherDashboardData({ user }: { user: SessionUser }) {
           </div>
           <div className="metric-row">
             <div>
-              <strong>{context.pendingConclusions}</strong>
-              <span>conclusiones por completar</span>
+              <strong>{context.studentsInScope}</strong>
+              <span>estudiantes bajo seguimiento</span>
             </div>
             <div>
               <strong>{context.nextClass ? "1" : "0"}</strong>
