@@ -227,47 +227,52 @@ export async function getFamilyOverview(guardianId: string) {
 
 export async function getStudentOverview(studentId: string) {
   const db = getDb();
-  const [student] = await db
-    .select({
-      firstName: users.firstName,
-      lastName: users.lastName,
-      classroomName: classrooms.name,
-      grade: classrooms.grade,
-      section: classrooms.section,
-    })
-    .from(users)
-    .leftJoin(enrollments, and(eq(enrollments.studentId, users.id), eq(enrollments.active, true)))
-    .leftJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
-    .where(eq(users.id, studentId))
-    .limit(1);
+  const [studentRows, progress, recentAttendance] = await Promise.all([
+    db
+      .select({
+        firstName: users.firstName,
+        lastName: users.lastName,
+        classroomName: classrooms.name,
+        grade: classrooms.grade,
+        section: classrooms.section,
+      })
+      .from(users)
+      .leftJoin(enrollments, and(eq(enrollments.studentId, users.id), eq(enrollments.active, true)))
+      .leftJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
+      .where(eq(users.id, studentId))
+      .limit(1),
+    db
+      .select({
+        level: competencyResults.level,
+        subjectName: subjects.name,
+        updatedAt: competencyResults.updatedAt,
+      })
+      .from(competencyResults)
+      .innerJoin(evaluations, eq(evaluations.id, competencyResults.evaluationId))
+      .innerJoin(teacherAssignments, eq(teacherAssignments.id, evaluations.assignmentId))
+      .innerJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
+      .where(eq(competencyResults.studentId, studentId))
+      .orderBy(desc(competencyResults.updatedAt))
+      .limit(12),
+    db
+      .select({ status: attendanceRecords.status, attendanceDate: attendanceRecords.attendanceDate })
+      .from(attendanceRecords)
+      .where(eq(attendanceRecords.studentId, studentId))
+      .orderBy(desc(attendanceRecords.attendanceDate))
+      .limit(10),
+  ]);
 
-  const progress = await db
-    .select({
-      level: competencyResults.level,
-      subjectName: subjects.name,
-      updatedAt: competencyResults.updatedAt,
-    })
-    .from(competencyResults)
-    .innerJoin(studentProfiles, eq(studentProfiles.userId, competencyResults.studentId))
-    .innerJoin(
-      enrollments,
-      and(eq(enrollments.studentId, studentProfiles.userId), eq(enrollments.active, true)),
-    )
-    .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
-    .innerJoin(teacherAssignments, eq(teacherAssignments.classroomId, classrooms.id))
-    .innerJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
-    .where(eq(competencyResults.studentId, studentId))
-    .orderBy(desc(competencyResults.updatedAt))
-    .limit(12);
-
-  const recentAttendance = await db
-    .select({ status: attendanceRecords.status, attendanceDate: attendanceRecords.attendanceDate })
-    .from(attendanceRecords)
-    .where(eq(attendanceRecords.studentId, studentId))
-    .orderBy(desc(attendanceRecords.attendanceDate))
-    .limit(10);
-
-  return { student, progress, recentAttendance };
+  const totalAttendance = recentAttendance.length;
+  const presentAttendance = recentAttendance.filter((record) => record.status === "presente").length;
+  return {
+    student: studentRows[0],
+    progress,
+    recentAttendance,
+    statistics: {
+      attendanceRate: totalAttendance ? Math.round((presentAttendance / totalAttendance) * 100) : null,
+      achievedCompetencies: progress.filter((item) => item.level === "AD" || item.level === "A").length,
+    },
+  };
 }
 
 export async function getAdminOverview(institutionId: string) {

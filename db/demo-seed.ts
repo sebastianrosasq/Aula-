@@ -11,12 +11,11 @@ if (process.env.NODE_ENV === "production") {
   throw new Error("Las cuentas de demostración no se pueden crear en producción.");
 }
 
-const required = ["DATABASE_HOST", "DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_NAME"] as const;
-for (const key of required) {
-  if (!process.env[key]) throw new Error(key + " no está configurado en .env.local.");
+for (const key of ["DATABASE_HOST", "DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_NAME"] as const) {
+  if (!process.env[key]) throw new Error(`${key} no está configurado en .env.local.`);
 }
 
-const ids = {
+const root = {
   institution: "00000000-0000-4000-8000-000000000001",
   admin: "00000000-0000-4000-8000-000000000010",
   teacher: "00000000-0000-4000-8000-000000000011",
@@ -33,6 +32,9 @@ const ids = {
   attendance: "00000000-0000-4000-8000-000000000028",
 } as const;
 
+const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, "0")}`;
+const password = "AulaEnlace2026!";
+const year = 2026;
 const pool = mysql.createPool({
   host: process.env.DATABASE_HOST,
   port: Number(process.env.DATABASE_PORT ?? 3306),
@@ -41,7 +43,7 @@ const pool = mysql.createPool({
   database: process.env.DATABASE_NAME,
 });
 const db = drizzle(pool, { schema, mode: "default" });
-const passwordHash = await hash("AulaEnlace2026!", 12);
+const passwordHash = await hash(password, 12);
 const today = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Lima",
   year: "numeric",
@@ -49,173 +51,105 @@ const today = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 }).format(new Date());
 
-await db
-  .insert(schema.institutions)
-  .values({ id: ids.institution, name: "Institución Demo AulaEnlace", modularCode: "DEMO-2026" })
-  .onDuplicateKeyUpdate({ set: { name: "Institución Demo AulaEnlace", active: true } });
+const subjects = [
+  ["comunicacion", "Comunicación", "#176B63", "Se comunica oralmente en su lengua materna", ["primaria", "secundaria"]],
+  ["matematica", "Matemática", "#3563B5", "Resuelve problemas de cantidad", ["primaria", "secundaria"]],
+  ["ciencia", "Ciencia y Tecnología", "#0E8D7A", "Indaga mediante métodos científicos para construir conocimientos", ["primaria", "secundaria"]],
+  ["arte", "Arte y Cultura", "#9B59B6", "Crea proyectos desde los lenguajes artísticos", ["primaria", "secundaria"]],
+  ["fisica", "Educación Física", "#D16B28", "Asume una vida saludable", ["primaria", "secundaria"]],
+  ["ingles", "Inglés", "#6B50B8", "Se comunica oralmente en inglés como lengua extranjera", ["primaria", "secundaria"]],
+  ["religion", "Educación Religiosa", "#A36A13", "Construye su identidad como persona humana, amada por Dios", ["primaria", "secundaria"]],
+  ["personal", "Personal Social", "#B14D60", "Construye su identidad", ["primaria"]],
+  ["sociales", "Ciencias Sociales", "#B14D60", "Construye interpretaciones históricas", ["secundaria"]],
+  ["dpcc", "Desarrollo Personal, Ciudadanía y Cívica", "#A34876", "Convive y participa democráticamente", ["secundaria"]],
+  ["trabajo", "Educación para el Trabajo", "#467C53", "Gestiona proyectos de emprendimiento económico o social", ["secundaria"]],
+] as const;
 
-const demoUsers = [
-  {
-    id: ids.admin,
-    email: "admin@aulaenlace.demo",
-    role: "admin" as const,
-    firstName: "Andrea",
-    lastName: "Ramos",
-  },
-  {
-    id: ids.teacher,
-    email: "docente@aulaenlace.demo",
-    role: "docente" as const,
-    firstName: "Elena",
-    lastName: "Paredes",
-  },
-  {
-    id: ids.student,
-    email: "estudiante@aulaenlace.demo",
-    role: "estudiante" as const,
-    firstName: "Mateo",
-    lastName: "Torres",
-  },
-  {
-    id: ids.guardian,
-    email: "padre@aulaenlace.demo",
-    role: "padre" as const,
-    firstName: "Lucía",
-    lastName: "Torres",
-  },
-];
+const teachers = [
+  ["Elena", "Paredes"], ["Ricardo", "Salazar"], ["Carla", "Mendoza"], ["Valeria", "Quispe"],
+  ["Jorge", "Vílchez"], ["Paola", "García"], ["María", "Rojas"], ["Diego", "Huamán"],
+  ["Natalia", "Cruz"], ["Sofía", "Flores"], ["Luis", "Cáceres"],
+] as const;
+const names = ["Ana", "Bruno", "Camila", "Diego", "Emilia", "Fabio", "Gabriela", "Hugo", "Isabela", "Joaquín", "Kiara", "Leonardo"];
+const surnames = ["Torres", "Chávez", "López", "Mamani", "Ríos", "Gómez", "Paredes", "Soto", "Vargas", "Castillo", "Núñez", "Medina"];
+const guardianNames = ["Rosa", "Carlos", "Mónica", "Juan", "Patricia", "Miguel", "Teresa", "Óscar", "Claudia", "Renzo", "Lorena", "Víctor"];
 
-for (const user of demoUsers) {
-  await db
-    .insert(schema.users)
-    .values({ ...user, institutionId: ids.institution, passwordHash, active: true })
-    .onDuplicateKeyUpdate({
-      set: {
-        passwordHash,
-        role: user.role,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        active: true,
-      },
-    });
+type Classroom = { id: string; stage: "primaria" | "secundaria"; grade: string; section: "A" | "B"; name: string };
+const classrooms: Classroom[] = (["primaria", "secundaria"] as const).flatMap((stage) =>
+  Array.from({ length: 6 }, (_, number) =>
+    (["A", "B"] as const).map((section) => {
+      const grade = number + 1;
+      const existing = stage === "primaria" && grade === 5 && section === "B";
+      const index = (stage === "primaria" ? 0 : 12) + number * 2 + (section === "B" ? 1 : 0);
+      const label = `${grade}.º ${stage === "primaria" ? "Primaria" : "Secundaria"}`;
+      return { id: existing ? root.classroom : id(100 + index), stage, grade: label, section, name: `${label} ${section}` };
+    }),
+  ).flat(),
+);
+
+await db.insert(schema.institutions).values({ id: root.institution, name: "Institución Demo Aula+", modularCode: "DEMO-2026" }).onDuplicateKeyUpdate({ set: { name: "Institución Demo Aula+", active: true } });
+await db.insert(schema.users).values({ id: root.admin, institutionId: root.institution, email: "admin@aulaenlace.demo", passwordHash, role: "admin", firstName: "Andrea", lastName: "Ramos", active: true }).onDuplicateKeyUpdate({ set: { passwordHash, active: true } });
+
+const subjectId = new Map<string, string>();
+const teacherId = new Map<string, string>();
+for (const [index, subject] of subjects.entries()) {
+  const [key, subjectName, color, competency] = subject;
+  const currentSubjectId = key === "comunicacion" ? root.subject : id(200 + index);
+  const currentTeacherId = key === "comunicacion" ? root.teacher : id(300 + index);
+  subjectId.set(key, currentSubjectId);
+  teacherId.set(key, currentTeacherId);
+  const [firstName, lastName] = teachers[index];
+  await db.insert(schema.users).values({ id: currentTeacherId, institutionId: root.institution, email: key === "comunicacion" ? "docente@aulaenlace.demo" : `prof.${key}@aulaenlace.demo`, passwordHash, role: "docente", firstName, lastName, active: true }).onDuplicateKeyUpdate({ set: { passwordHash, active: true } });
+  await db.insert(schema.teacherProfiles).values({ userId: currentTeacherId, specialty: subjectName }).onDuplicateKeyUpdate({ set: { specialty: subjectName } });
+  await db.insert(schema.subjects).values({ id: currentSubjectId, institutionId: root.institution, name: subjectName, color, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
+  await db.insert(schema.competencies).values({ id: key === "comunicacion" ? root.competency : id(400 + index), subjectId: currentSubjectId, name: competency, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
 }
 
-await db
-  .insert(schema.teacherProfiles)
-  .values({ userId: ids.teacher, specialty: "Comunicación" })
-  .onDuplicateKeyUpdate({ set: { specialty: "Comunicación" } });
-await db
-  .insert(schema.studentProfiles)
-  .values({ userId: ids.student, studentCode: "DEMO-EST-001", active: true })
-  .onDuplicateKeyUpdate({ set: { active: true } });
-await db
-  .insert(schema.guardianProfiles)
-  .values({ userId: ids.guardian })
-  .onDuplicateKeyUpdate({ set: { phone: null } });
-await db
-  .insert(schema.classrooms)
-  .values({
-    id: ids.classroom,
-    institutionId: ids.institution,
-    name: "5.º B",
-    grade: "5.º",
-    section: "B",
-    academicYear: 2026,
-    active: true,
-  })
-  .onDuplicateKeyUpdate({ set: { name: "5.º B", active: true } });
-await db
-  .insert(schema.subjects)
-  .values({
-    id: ids.subject,
-    institutionId: ids.institution,
-    name: "Comunicación",
-    color: "#176B63",
-    active: true,
-  })
-  .onDuplicateKeyUpdate({ set: { name: "Comunicación", active: true } });
-await db
-  .insert(schema.teacherAssignments)
-  .values({
-    id: ids.assignment,
-    teacherId: ids.teacher,
-    classroomId: ids.classroom,
-    subjectId: ids.subject,
-    active: true,
-  })
-  .onDuplicateKeyUpdate({ set: { active: true } });
-await db
-  .insert(schema.enrollments)
-  .values({ id: ids.enrollment, studentId: ids.student, classroomId: ids.classroom, active: true })
-  .onDuplicateKeyUpdate({ set: { active: true } });
-await db
-  .insert(schema.guardianStudents)
-  .values({
-    id: ids.guardianStudent,
-    guardianId: ids.guardian,
-    studentId: ids.student,
-    relationship: "Madre",
-    primaryContact: true,
-  })
-  .onDuplicateKeyUpdate({ set: { relationship: "Madre", primaryContact: true } });
-await db
-  .insert(schema.competencies)
-  .values({
-    id: ids.competency,
-    subjectId: ids.subject,
-    name: "Lee diversos tipos de textos escritos",
-    active: true,
-  })
-  .onDuplicateKeyUpdate({ set: { active: true } });
-await db
-  .insert(schema.evaluations)
-  .values({
-    id: ids.evaluation,
-    assignmentId: ids.assignment,
-    competencyId: ids.competency,
-    title: "Comprensión lectora",
-    evaluationDate: today,
-    createdById: ids.teacher,
-  })
-  .onDuplicateKeyUpdate({ set: { title: "Comprensión lectora", evaluationDate: today } });
-await db
-  .insert(schema.competencyResults)
-  .values({
-    id: ids.result,
-    evaluationId: ids.evaluation,
-    studentId: ids.student,
-    level: "A",
-    observation: "Demuestra comprensión de ideas principales.",
-  })
-  .onDuplicateKeyUpdate({
-    set: { level: "A", observation: "Demuestra comprensión de ideas principales." },
-  });
-await db
-  .insert(schema.attendanceRecords)
-  .values({
-    id: ids.attendance,
-    classroomId: ids.classroom,
-    studentId: ids.student,
-    recordedById: ids.teacher,
-    attendanceDate: today,
-    status: "presente",
-  })
-  .onDuplicateKeyUpdate({ set: { status: "presente", recordedById: ids.teacher } });
+const assignmentByClassSubject = new Map<string, { id: string; teacherId: string; subjectId: string }>();
+for (const [classIndex, classroom] of classrooms.entries()) {
+  await db.insert(schema.classrooms).values({ id: classroom.id, institutionId: root.institution, name: classroom.name, grade: classroom.grade, section: classroom.section, academicYear: year, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
+  let subjectIndex = 0;
+  for (const subject of subjects) {
+    const [key, , , , stages] = subject;
+    if (!(stages as readonly string[]).includes(classroom.stage)) continue;
+    const original = classroom.id === root.classroom && key === "comunicacion";
+    const assignmentId = original ? root.assignment : id(1000 + classIndex * 16 + subjectIndex);
+    const subjectRef = subjectId.get(key)!;
+    const teacherRef = teacherId.get(key)!;
+    assignmentByClassSubject.set(`${classroom.id}:${key}`, { id: assignmentId, teacherId: teacherRef, subjectId: subjectRef });
+    await db.insert(schema.teacherAssignments).values({ id: assignmentId, teacherId: teacherRef, classroomId: classroom.id, subjectId: subjectRef, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
+    if (!original) await db.insert(schema.scheduleSlots).values({ id: id(2000 + classIndex * 16 + subjectIndex), assignmentId, dayOfWeek: (subjectIndex % 5) + 1, startsAt: `${String(8 + (subjectIndex % 5)).padStart(2, "0")}:00:00`, endsAt: `${String(9 + (subjectIndex % 5)).padStart(2, "0")}:00:00`, room: `Aula ${classroom.name}` }).onDuplicateKeyUpdate({ set: { room: `Aula ${classroom.name}` } });
+    subjectIndex += 1;
+  }
+}
 
-for (let day = 1; day <= 7; day += 1) {
-  const slotId = "00000000-0000-4000-8000-0000000000" + String(30 + day);
-  await db
-    .insert(schema.scheduleSlots)
-    .values({
-      id: slotId,
-      assignmentId: ids.assignment,
-      dayOfWeek: day,
-      startsAt: "00:00:00",
-      endsAt: "23:59:00",
-      room: "Aula 5B",
-    })
-    .onDuplicateKeyUpdate({ set: { startsAt: "00:00:00", endsAt: "23:59:00", room: "Aula 5B" } });
+let studentIndex = 0;
+for (const classroom of classrooms) {
+  const key = classroom.stage === "primaria" ? "comunicacion" : "matematica";
+  const assignment = assignmentByClassSubject.get(`${classroom.id}:${key}`)!;
+  const competencyId = key === "comunicacion" ? root.competency : id(401);
+  const originalClass = classroom.id === root.classroom;
+  const evaluationId = originalClass ? root.evaluation : id(3000 + classrooms.indexOf(classroom));
+  await db.insert(schema.evaluations).values({ id: evaluationId, assignmentId: assignment.id, competencyId, title: originalClass ? "Comprensión lectora" : `Actividad diagnóstica de ${classroom.name}`, evaluationDate: today, createdById: assignment.teacherId }).onDuplicateKeyUpdate({ set: { evaluationDate: today } });
+  for (let seat = 0; seat < 3; seat += 1) {
+    const original = originalClass && seat === 0;
+    const currentStudentId = original ? root.student : id(5000 + studentIndex);
+    const currentGuardianId = original ? root.guardian : id(6000 + studentIndex);
+    const firstName = original ? "Mateo" : names[studentIndex % names.length];
+    const lastName = original ? "Torres" : surnames[(studentIndex * 3 + 1) % surnames.length];
+    const guardianFirstName = original ? "Lucía" : guardianNames[studentIndex % guardianNames.length];
+    const number = String(studentIndex + 1).padStart(3, "0");
+    await db.insert(schema.users).values({ id: currentStudentId, institutionId: root.institution, email: original ? "estudiante@aulaenlace.demo" : `estudiante.${number}@aulaenlace.demo`, passwordHash, role: "estudiante", firstName, lastName, active: true }).onDuplicateKeyUpdate({ set: { passwordHash, active: true } });
+    await db.insert(schema.users).values({ id: currentGuardianId, institutionId: root.institution, email: original ? "padre@aulaenlace.demo" : `familia.${number}@aulaenlace.demo`, passwordHash, role: "padre", firstName: guardianFirstName, lastName, active: true }).onDuplicateKeyUpdate({ set: { passwordHash, active: true } });
+    await db.insert(schema.studentProfiles).values({ userId: currentStudentId, studentCode: original ? "DEMO-EST-001" : `AULA-2026-${number}`, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
+    await db.insert(schema.guardianProfiles).values({ userId: currentGuardianId }).onDuplicateKeyUpdate({ set: { phone: null } });
+    await db.insert(schema.enrollments).values({ id: original ? root.enrollment : id(7000 + studentIndex), studentId: currentStudentId, classroomId: classroom.id, active: true }).onDuplicateKeyUpdate({ set: { active: true } });
+    await db.insert(schema.guardianStudents).values({ id: original ? root.guardianStudent : id(8000 + studentIndex), guardianId: currentGuardianId, studentId: currentStudentId, relationship: studentIndex % 2 ? "Padre" : "Madre", primaryContact: true }).onDuplicateKeyUpdate({ set: { primaryContact: true } });
+    await db.insert(schema.competencyResults).values({ id: original ? root.result : id(9000 + studentIndex), evaluationId, studentId: currentStudentId, level: (["AD", "A", "A", "B", "C"] as const)[studentIndex % 5], observation: "Registro de demostración para seguimiento de aprendizaje." }).onDuplicateKeyUpdate({ set: { observation: "Registro de demostración para seguimiento de aprendizaje." } });
+    await db.insert(schema.attendanceRecords).values({ id: original ? root.attendance : id(10000 + studentIndex), classroomId: classroom.id, studentId: currentStudentId, recordedById: assignment.teacherId, attendanceDate: today, status: (["presente", "presente", "tardanza", "presente", "ausente"] as const)[studentIndex % 5] }).onDuplicateKeyUpdate({ set: { status: "presente" } });
+    studentIndex += 1;
+  }
 }
 
 await pool.end();
-console.log("Cuentas de demostración creadas o actualizadas.");
+console.log(`Datos listos: ${classrooms.length} secciones, ${studentIndex} estudiantes, ${studentIndex} familias y ${subjects.length} docentes. Contraseña común: ${password}`);

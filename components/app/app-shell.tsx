@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LogOut, Menu, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { SessionUser } from "@/lib/auth";
 import { roleLabels } from "@/lib/permissions";
@@ -36,10 +37,10 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
   return (
     <div className="app-surface">
       <header className="app-header">
-        <a href="/panel" className="app-brand">
+        <Link href="/panel" className="app-brand">
           <span>A</span>
           <strong>Aula+</strong>
-        </a>
+        </Link>
         <button
           className="app-menu-toggle"
           type="button"
@@ -49,9 +50,9 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
           {menuOpen ? <X /> : <Menu />}
         </button>
         <nav className={"app-nav " + (menuOpen ? "open" : "")} aria-label="Navegación del sistema">
-          <a href="/panel">Inicio</a>
-          <a href="/panel/mensajes">Mensajes</a>
-          {user.role === "admin" ? <a href="/panel/administracion">Administración</a> : null}
+          <Link href="/panel">Inicio</Link>
+          <Link href="/panel/mensajes">Mensajes</Link>
+          {user.role === "admin" ? <Link href="/panel/administracion">Administración</Link> : null}
         </nav>
         <div className="app-user-menu">
           <span className="app-role">{roleLabels[user.role]}</span>

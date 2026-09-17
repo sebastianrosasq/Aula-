@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { Building2, KeyRound, UserPlus, UserRoundCog } from "lucide-react";
+import { FormEvent, useMemo, useState } from "react";
+import { Building2, KeyRound, Search, UserPlus, UserRoundCog } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type Member = {
@@ -37,6 +37,16 @@ export function AdminManager({
   const router = useRouter();
   const [notice, setNotice] = useState<Notice | null>(null);
   const [saving, setSaving] = useState(false);
+  const [memberQuery, setMemberQuery] = useState("");
+  const visibleMembers = useMemo(() => {
+    const query = memberQuery.trim().toLocaleLowerCase("es-PE");
+    if (!query) return members.slice(0, 60);
+    return members.filter((member) =>
+      `${member.firstName} ${member.lastName} ${member.email} ${roleNames[member.role]}`
+        .toLocaleLowerCase("es-PE")
+        .includes(query),
+    );
+  }, [memberQuery, members]);
 
   async function submit(endpoint: string, method: "POST" | "PATCH", payload: unknown) {
     if (saving) return false;
@@ -160,7 +170,6 @@ export function AdminManager({
               <option value="docente">Docente</option>
               <option value="estudiante">Estudiante</option>
               <option value="padre">Familia</option>
-              <option value="admin">Administración</option>
             </select>
           </label>
           <label>
@@ -181,13 +190,25 @@ export function AdminManager({
           </div>
           <UserRoundCog />
         </div>
+        <div className="member-toolbar">
+          <label className="app-search">
+            <Search aria-hidden="true" />
+            <input
+              value={memberQuery}
+              onChange={(event) => setMemberQuery(event.target.value)}
+              placeholder="Buscar por nombre, correo o rol"
+              aria-label="Buscar usuarios"
+            />
+          </label>
+          <span>{memberQuery ? `${visibleMembers.length} encontrados` : `${members.length} cuentas`}</span>
+        </div>
         {notice ? (
           <p className={"attendance-feedback " + notice.kind} role={notice.kind === "error" ? "alert" : "status"}>
             {notice.message}
           </p>
         ) : null}
         <div className="member-list">
-          {members.map((member) => (
+          {visibleMembers.map((member) => (
             <article className="member-row" key={member.id}>
               <div className="member-avatar">
                 {member.firstName.charAt(0)}
@@ -221,6 +242,9 @@ export function AdminManager({
             </article>
           ))}
         </div>
+        {!memberQuery && members.length > visibleMembers.length ? (
+          <p className="member-list-note">Mostrando las primeras {visibleMembers.length} cuentas. Usa el buscador para localizar las demás.</p>
+        ) : null}
       </section>
     </div>
   );

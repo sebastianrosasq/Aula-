@@ -324,9 +324,21 @@ async function StudentDashboard({ user }: { user: SessionUser }) {
             <CheckCircle2 size={22} />
           </div>
           <strong className="metric-number">
-            {overview.recentAttendance.filter((record) => record.status === "presente").length}
+            {overview.statistics.attendanceRate ?? "—"}
+            {overview.statistics.attendanceRate !== null ? "%" : ""}
           </strong>
-          <p className="dashboard-card__body">asistencias registradas.</p>
+          <p className="dashboard-card__body">de asistencia en los registros recientes.</p>
+        </article>
+        <article className="dashboard-card">
+          <div className="dashboard-card__heading">
+            <div>
+              <p className="eyebrow">Logros</p>
+              <h2>Avance destacado</h2>
+            </div>
+            <BookOpenCheck size={22} />
+          </div>
+          <strong className="metric-number">{overview.statistics.achievedCompetencies}</strong>
+          <p className="dashboard-card__body">competencias en nivel AD o A.</p>
         </article>
       </section>
 
