@@ -12,6 +12,7 @@ import {
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app/app-shell";
+import { PerformanceChart } from "@/components/app/performance-chart";
 import { getSessionUser, type SessionUser } from "@/lib/auth";
 import {
   getAdminOverview,
@@ -274,6 +275,10 @@ async function GuardianDashboard({ user }: { user: SessionUser }) {
           )}
         </article>
       </section>
+      <section className="dashboard-card progress-card">
+        <div className="dashboard-card__heading"><div><p className="eyebrow">Desempeño</p><h2>Avance por curso</h2></div><BookOpenCheck size={22} /></div>
+        <PerformanceChart progress={overview.recentProgress} />
+      </section>
       {overview.recentAlerts.length ? (
         <section className="dashboard-card family-alerts">
           <div className="dashboard-card__heading">
@@ -362,6 +367,13 @@ async function StudentDashboard({ user }: { user: SessionUser }) {
         ) : (
           <p className="dashboard-card__body">Tu docente aún no ha publicado evaluaciones.</p>
         )}
+      </section>
+      <section className="dashboard-card progress-card">
+        <div className="dashboard-card__heading">
+          <div><p className="eyebrow">Desempeño</p><h2>Mi avance por curso</h2></div>
+          <BookOpenCheck size={22} />
+        </div>
+        <PerformanceChart progress={overview.progress} />
       </section>
     </>
   );

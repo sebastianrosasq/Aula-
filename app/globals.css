@@ -79,6 +79,8 @@ a {
 .auth-intro {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: clamp(32px, 6vw, 65px);
   color: white;
   background:
@@ -93,6 +95,13 @@ a {
   font-family: Manrope, sans-serif;
   font-size: 1.06rem;
   font-weight: 800;
+}
+.auth-brand {
+  padding: 13px 17px;
+  border: 1px solid rgba(214, 243, 236, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.1);
 }
 
 .auth-brand__icon,
@@ -664,6 +673,10 @@ a {
   color: var(--brand-dark);
   font-size: 0.86rem;
 }
+.performance-chart {
+  width: 100%;
+  margin-top: 14px;
+}
 
 .course-toolbar {
   display: flex;
@@ -939,6 +952,12 @@ a {
   grid-template-columns: minmax(280px, 0.82fr) minmax(330px, 1.18fr);
   gap: 18px;
 }
+.message-compose {
+  align-self: start;
+}
+.message-history {
+  min-height: 460px;
+}
 
 .admin-workspace {
   display: grid;
@@ -1154,6 +1173,7 @@ a {
   border-radius: 12px;
   color: #3b565a;
   background: #f0f6f5;
+  box-shadow: 0 3px 10px rgba(28, 72, 76, 0.04);
 }
 .message-thread article.sent {
   justify-self: end;
