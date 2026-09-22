@@ -1,6 +1,7 @@
-import { GraduationCap, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
 
+import { SchoolMark } from "@/components/brand/school-mark";
 import { LoginForm } from "@/components/auth/login-form";
 import { getSessionUser } from "@/lib/auth";
 
@@ -13,8 +14,8 @@ export default async function LoginPage() {
       <section className="auth-layout">
         <section className="auth-card" aria-labelledby="login-title">
           <div className="auth-brand auth-brand--login">
-            <span className="auth-brand__icon">
-              <GraduationCap size={22} />
+            <span className="brand-mark" aria-hidden="true">
+              <SchoolMark />
             </span>
             <span>Aula+</span>
           </div>

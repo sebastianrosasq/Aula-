@@ -15,5 +15,10 @@ export function invalidRequest(message = "Datos no válidos.") {
 export function requireSameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   const host = request.headers.get("host");
-  return !origin || !host || new URL(origin).host === host;
+  if (!origin || !host) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
 }

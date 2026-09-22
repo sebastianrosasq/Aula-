@@ -35,7 +35,12 @@ export function AdminManager({
   institution: Institution;
   members: Member[];
   classrooms: Array<{ id: string; name: string }>;
-  students: Array<{ id: string; firstName: string; lastName: string }>;
+  students: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    classroomName: string | null;
+  }>;
   currentUserId: string;
 }) {
   const router = useRouter();
@@ -43,6 +48,8 @@ export function AdminManager({
   const [saving, setSaving] = useState(false);
   const [memberQuery, setMemberQuery] = useState("");
   const [newRole, setNewRole] = useState<"docente" | "estudiante" | "padre">("docente");
+  const [resetTarget, setResetTarget] = useState<Member | null>(null);
+  const [temporaryPassword, setTemporaryPassword] = useState("");
   const visibleMembers = useMemo(() => {
     const query = memberQuery.trim().toLocaleLowerCase("es-PE");
     if (!query) return members.slice(0, 60);
@@ -53,7 +60,12 @@ export function AdminManager({
     );
   }, [memberQuery, members]);
 
-  async function submit(endpoint: string, method: "POST" | "PATCH", payload: unknown) {
+  async function submit(
+    endpoint: string,
+    method: "POST" | "PATCH",
+    payload: unknown,
+    successMessage = "Cambios guardados correctamente.",
+  ) {
     if (saving) return false;
     setSaving(true);
     setNotice(null);
@@ -68,13 +80,14 @@ export function AdminManager({
         setNotice({ kind: "error", message: body.error ?? "No se pudo guardar el cambio." });
         return false;
       }
-      setNotice({ kind: "success", message: "Cambios guardados correctamente." });
+      setNotice({ kind: "success", message: successMessage });
       router.refresh();
       return true;
     } catch {
       setNotice({
         kind: "error",
-        message: "No se pudo conectar para guardar los cambios. Revisa tu conexión e inténtalo nuevamente.",
+        message:
+          "No se pudo conectar para guardar los cambios. Revisa tu conexión e inténtalo nuevamente.",
       });
       return false;
     } finally {
@@ -106,17 +119,30 @@ export function AdminManager({
     if (created) event.currentTarget.reset();
   }
 
-  async function updateMember(member: Member, action: "active" | "password") {
-    const temporaryPassword =
-      action === "password"
-        ? window.prompt("Nueva contraseña temporal (mínimo 10 caracteres):")
-        : undefined;
-    if (action === "password" && !temporaryPassword) return;
-    await submit(
-      "/api/admin/users/" + member.id,
+  async function toggleMember(member: Member) {
+    await submit("/api/admin/users/" + member.id, "PATCH", { active: !member.active });
+  }
+
+  async function resetPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!resetTarget) return;
+    if (temporaryPassword.length < 10) {
+      setNotice({
+        kind: "error",
+        message: "La contraseña temporal debe tener al menos 10 caracteres.",
+      });
+      return;
+    }
+    const updated = await submit(
+      "/api/admin/users/" + resetTarget.id,
       "PATCH",
-      action === "active" ? { active: !member.active } : { temporaryPassword },
+      { temporaryPassword },
+      `Acceso temporal restablecido para ${resetTarget.firstName} ${resetTarget.lastName}.`,
     );
+    if (updated) {
+      setTemporaryPassword("");
+      setResetTarget(null);
+    }
   }
 
   return (
@@ -173,7 +199,11 @@ export function AdminManager({
           </label>
           <label>
             Rol
-            <select name="role" value={newRole} onChange={(event) => setNewRole(event.target.value as typeof newRole)}>
+            <select
+              name="role"
+              value={newRole}
+              onChange={(event) => setNewRole(event.target.value as typeof newRole)}
+            >
               <option value="docente">Docente</option>
               <option value="estudiante">Estudiante</option>
               <option value="padre">Familia</option>
@@ -183,8 +213,14 @@ export function AdminManager({
             <label>
               Aula y sección
               <select name="classroomId" required defaultValue="">
-                <option value="" disabled>Selecciona un aula</option>
-                {classrooms.map((classroom) => <option key={classroom.id} value={classroom.id}>{classroom.name}</option>)}
+                <option value="" disabled>
+                  Selecciona un aula
+                </option>
+                {classrooms.map((classroom) => (
+                  <option key={classroom.id} value={classroom.id}>
+                    {classroom.name}
+                  </option>
+                ))}
               </select>
             </label>
           ) : null}
@@ -192,8 +228,14 @@ export function AdminManager({
             <label>
               Estudiante vinculado
               <select name="linkedStudentId" required defaultValue="">
-                <option value="" disabled>Selecciona un estudiante</option>
-                {students.map((student) => <option key={student.id} value={student.id}>{student.lastName}, {student.firstName}</option>)}
+                <option value="" disabled>
+                  Selecciona un estudiante
+                </option>
+                {students.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.lastName}, {student.firstName} · {student.classroomName ?? "Sin aula"}
+                  </option>
+                ))}
               </select>
             </label>
           ) : null}
@@ -225,10 +267,15 @@ export function AdminManager({
               aria-label="Buscar usuarios"
             />
           </label>
-          <span>{memberQuery ? `${visibleMembers.length} encontrados` : `${members.length} cuentas`}</span>
+          <span>
+            {memberQuery ? `${visibleMembers.length} encontrados` : `${members.length} cuentas`}
+          </span>
         </div>
         {notice ? (
-          <p className={"attendance-feedback " + notice.kind} role={notice.kind === "error" ? "alert" : "status"}>
+          <p
+            className={"attendance-feedback " + notice.kind}
+            role={notice.kind === "error" ? "alert" : "status"}
+          >
             {notice.message}
           </p>
         ) : null}
@@ -253,13 +300,14 @@ export function AdminManager({
               <div className="member-actions">
                 <button
                   type="button"
-                  onClick={() => updateMember(member, "password")}
+                  onClick={() => setResetTarget(member)}
                   aria-label={"Restablecer contraseña de " + member.firstName}
+                  aria-haspopup="dialog"
                 >
                   <KeyRound size={16} />
                 </button>
                 {member.id !== currentUserId ? (
-                  <button type="button" onClick={() => updateMember(member, "active")}>
+                  <button type="button" onClick={() => toggleMember(member)}>
                     {member.active ? "Desactivar" : "Activar"}
                   </button>
                 ) : null}
@@ -268,7 +316,50 @@ export function AdminManager({
           ))}
         </div>
         {!memberQuery && members.length > visibleMembers.length ? (
-          <p className="member-list-note">Mostrando las primeras {visibleMembers.length} cuentas. Usa el buscador para localizar las demás.</p>
+          <p className="member-list-note">
+            Mostrando las primeras {visibleMembers.length} cuentas. Usa el buscador para localizar
+            las demás.
+          </p>
+        ) : null}
+        {resetTarget ? (
+          <form
+            className="password-reset-panel"
+            onSubmit={resetPassword}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-password-title"
+          >
+            <div>
+              <p className="app-eyebrow">Acceso temporal</p>
+              <h3 id="reset-password-title">Restablecer acceso de {resetTarget.firstName}</h3>
+              <p>Entrega esta contraseña temporal a la persona por un canal seguro.</p>
+            </div>
+            <label>
+              Nueva contraseña temporal
+              <input
+                value={temporaryPassword}
+                onChange={(event) => setTemporaryPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+                minLength={10}
+                maxLength={128}
+                required
+                autoFocus
+              />
+            </label>
+            <div className="password-reset-panel__actions">
+              <button
+                className="app-secondary-button"
+                type="button"
+                onClick={() => setResetTarget(null)}
+              >
+                Cancelar
+              </button>
+              <button className="app-primary-button" disabled={saving} type="submit">
+                {saving ? "Guardando…" : "Restablecer acceso"}
+              </button>
+            </div>
+          </form>
         ) : null}
       </section>
     </div>

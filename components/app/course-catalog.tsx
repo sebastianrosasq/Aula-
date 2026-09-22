@@ -12,22 +12,26 @@ const roleCopy: Record<Role, { eyebrow: string; title: string; description: stri
   docente: {
     eyebrow: "Docencia",
     title: "Mis cursos",
-    description: "Cada curso combina una materia con una sección. Filtra para cambiar de grado y aula sin perder contexto.",
+    description:
+      "Cada curso combina una materia con una sección. Filtra para cambiar de grado y aula sin perder contexto.",
   },
   estudiante: {
     eyebrow: "Aprendizaje",
     title: "Mis cursos",
-    description: "Aquí ves las materias de tu aula, el docente responsable y tu último avance por competencia.",
+    description:
+      "Aquí ves las materias de tu aula, el docente responsable y tu último avance por competencia.",
   },
   padre: {
     eyebrow: "Familia",
     title: "Cursos de mis hijos",
-    description: "Revisa cada curso con su docente responsable y el avance más reciente de tu estudiante.",
+    description:
+      "Revisa cada curso con su docente responsable y el avance más reciente de tu estudiante.",
   },
   admin: {
     eyebrow: "Gestión académica",
     title: "Oferta de cursos",
-    description: "Consulta la distribución real de materias, secciones, docentes y estudiantes activos.",
+    description:
+      "Consulta la distribución real de materias, secciones, docentes y estudiantes activos.",
   },
 };
 
@@ -45,12 +49,13 @@ export function CourseCatalog({ role, courses }: { role: Role; courses: CourseCa
     [courses],
   );
   const students = useMemo(
-    () =>
-      [...new Map(
+    () => [
+      ...new Map(
         courses
           .filter((course) => course.studentId && course.studentName)
           .map((course) => [course.studentId!, course.studentName!]),
-      ).entries()],
+      ).entries(),
+    ],
     [courses],
   );
   const visibleCourses = courses.filter(
@@ -95,21 +100,35 @@ export function CourseCatalog({ role, courses }: { role: Role; courses: CourseCa
           </label>
         ) : null}
         <p>
-          {visibleCourses.length} {visibleCourses.length === 1 ? "curso visible" : "cursos visibles"}
+          {visibleCourses.length}{" "}
+          {visibleCourses.length === 1 ? "curso visible" : "cursos visibles"}
         </p>
       </section>
 
       {visibleCourses.length ? (
         <section className="course-grid" aria-label="Cursos">
           {visibleCourses.map((course) => (
-            <article className="course-card" key={`${course.assignmentId}:${course.studentId ?? "institution"}`}>
-              <span className="course-card__color" style={{ background: course.subjectColor }} aria-hidden="true" />
+            <article
+              className="course-card"
+              key={`${course.assignmentId}:${course.studentId ?? "institution"}`}
+            >
+              <span
+                className="course-card__color"
+                style={{ background: course.subjectColor }}
+                aria-hidden="true"
+              />
               <div className="course-card__topline">
                 <span>{course.subjectName}</span>
-                {course.latestLevel ? <strong className={`course-level course-level--${course.latestLevel}`}>{course.latestLevel}</strong> : null}
+                {course.latestLevel ? (
+                  <strong className={`course-level course-level--${course.latestLevel}`}>
+                    {course.latestLevel}
+                  </strong>
+                ) : null}
               </div>
               <h2>{course.classroomName}</h2>
-              {course.studentName ? <p className="course-card__student">Estudiante: {course.studentName}</p> : null}
+              {course.studentName ? (
+                <p className="course-card__student">Estudiante: {course.studentName}</p>
+              ) : null}
               <dl>
                 <div>
                   <dt>Docente responsable</dt>
@@ -128,11 +147,17 @@ export function CourseCatalog({ role, courses }: { role: Role; courses: CourseCa
                 )}
               </dl>
               {role === "docente" ? (
-                <Link className="course-card__action" href={`/panel/asistencia?classroomId=${course.classroomId}`}>
+                <Link
+                  className="course-card__action"
+                  href={`/panel/asistencia?classroomId=${course.classroomId}`}
+                >
                   <UsersRound size={16} /> Tomar asistencia
                 </Link>
               ) : (
-                <Link className="course-card__action" href="/panel/mensajes">
+                <Link
+                  className="course-card__action"
+                  href={`/panel/mensajes?recipientId=${course.teacherId}`}
+                >
                   <MessageSquareText size={16} /> Escribir al docente
                 </Link>
               )}

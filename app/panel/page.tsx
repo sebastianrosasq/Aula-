@@ -49,7 +49,10 @@ function Welcome({ user }: { user: SessionUser }) {
   };
   return (
     <header className="dashboard-welcome">
-      <div className="profile-welcome-avatar" aria-hidden="true">{user.firstName[0]}{user.lastName[0]}</div>
+      <div className="profile-welcome-avatar" aria-hidden="true">
+        {user.firstName[0]}
+        {user.lastName[0]}
+      </div>
       <div>
         <p className="eyebrow">
           Panel de{" "}
@@ -279,7 +282,13 @@ async function GuardianDashboard({ user }: { user: SessionUser }) {
         </article>
       </section>
       <section className="dashboard-card progress-card">
-        <div className="dashboard-card__heading"><div><p className="eyebrow">Desempeño</p><h2>Avance por curso</h2></div><BookOpenCheck size={22} /></div>
+        <div className="dashboard-card__heading">
+          <div>
+            <p className="eyebrow">Desempeño</p>
+            <h2>Avance por curso</h2>
+          </div>
+          <BookOpenCheck size={22} />
+        </div>
         <PerformanceChart progress={overview.recentProgress} />
       </section>
       {overview.recentAlerts.length ? (
@@ -322,6 +331,9 @@ async function StudentDashboard({ user }: { user: SessionUser }) {
           <p className="dashboard-card__body">
             Consulta tus avances por competencia y mantente al día con tu clase.
           </p>
+          <Link className="dashboard-card__link" href="/panel/cursos">
+            Ver mis cursos <ArrowRight size={16} />
+          </Link>
         </article>
         <article className="dashboard-card">
           <div className="dashboard-card__heading">
@@ -373,7 +385,10 @@ async function StudentDashboard({ user }: { user: SessionUser }) {
       </section>
       <section className="dashboard-card progress-card">
         <div className="dashboard-card__heading">
-          <div><p className="eyebrow">Desempeño</p><h2>Mi avance por curso</h2></div>
+          <div>
+            <p className="eyebrow">Desempeño</p>
+            <h2>Mi avance por curso</h2>
+          </div>
           <BookOpenCheck size={22} />
         </div>
         <PerformanceChart progress={overview.progress} />
@@ -392,11 +407,17 @@ async function AdminDashboard({ user }: { user: SessionUser }) {
           <p className="eyebrow">Usuarios activos</p>
           <strong className="metric-number">{overview.users}</strong>
           <p className="dashboard-card__body">miembros de la institución.</p>
+          <Link className="dashboard-card__link" href="/panel/administracion">
+            Gestionar accesos <ArrowRight size={16} />
+          </Link>
         </article>
         <article className="dashboard-card">
           <p className="eyebrow">Aulas activas</p>
           <strong className="metric-number">{overview.classrooms}</strong>
           <p className="dashboard-card__body">secciones en funcionamiento.</p>
+          <Link className="dashboard-card__link" href="/panel/cursos">
+            Ver oferta académica <ArrowRight size={16} />
+          </Link>
         </article>
         <article className="dashboard-card">
           <p className="eyebrow">Notificaciones</p>

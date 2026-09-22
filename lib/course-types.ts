@@ -8,6 +8,7 @@ export type CourseCatalogItem = {
   section: string;
   subjectName: string;
   subjectColor: string;
+  teacherId: string;
   teacherName: string;
   studentsCount: number;
   studentId?: string;

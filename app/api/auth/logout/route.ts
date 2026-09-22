@@ -11,7 +11,24 @@ export async function POST(request: Request) {
     await revokeCurrentSession();
   } finally {
     const response = NextResponse.json({ ok: true });
-    response.cookies.set(SESSION_COOKIE, "", { httpOnly: true, path: "/", expires: new Date(0) });
+    response.cookies.set(SESSION_COOKIE, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      expires: new Date(0),
+      maxAge: 0,
+    });
+    if (SESSION_COOKIE !== "aulaenlace_session") {
+      response.cookies.set("aulaenlace_session", "", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        path: "/",
+        expires: new Date(0),
+        maxAge: 0,
+      });
+    }
     return response;
   }
 }

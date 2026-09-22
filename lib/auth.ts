@@ -7,7 +7,8 @@ import { cookies } from "next/headers";
 import { getDb } from "@/db";
 import { sessions, users } from "@/db/schema";
 
-export const SESSION_COOKIE = "aulaenlace_session";
+export const SESSION_COOKIE =
+  process.env.NODE_ENV === "production" ? "__Host-aulaplus_session" : "aulaenlace_session";
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 8;
 
 export type AppRole = "admin" | "docente" | "estudiante" | "padre";
@@ -62,7 +63,12 @@ export async function createSession(userId: string) {
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  const cookieStore = await cookies();
+  const token =
+    cookieStore.get(SESSION_COOKIE)?.value ??
+    (SESSION_COOKIE !== "aulaenlace_session"
+      ? cookieStore.get("aulaenlace_session")?.value
+      : undefined);
   if (!token) return null;
 
   const db = getDb();
@@ -91,7 +97,11 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
 export async function revokeCurrentSession() {
   const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const token =
+    cookieStore.get(SESSION_COOKIE)?.value ??
+    (SESSION_COOKIE !== "aulaenlace_session"
+      ? cookieStore.get("aulaenlace_session")?.value
+      : undefined);
   if (token) {
     const db = getDb();
     await db.delete(sessions).where(eq(sessions.tokenHash, hashToken(token)));
@@ -108,6 +118,7 @@ export function sessionCookie(token: string, expiresAt: Date) {
       sameSite: "lax" as const,
       path: "/",
       expires: expiresAt,
+      priority: "high" as const,
     },
   };
 }

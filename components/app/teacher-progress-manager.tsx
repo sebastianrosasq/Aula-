@@ -15,12 +15,14 @@ type ProgressRow = {
   level: "AD" | "A" | "B" | "C";
   observation: string | null;
 };
+type Feedback = { kind: "success" | "error"; message: string };
 
 export function TeacherProgressManager({ initialRows }: { initialRows: ProgressRow[] }) {
   const [rows, setRows] = useState(initialRows);
   const [assignmentId, setAssignmentId] = useState(initialRows[0]?.assignmentId ?? "");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const courses = useMemo(
     () => [...new Map(rows.map((row) => [row.assignmentId, row])).values()],
     [rows],
@@ -32,38 +34,107 @@ export function TeacherProgressManager({ initialRows }: { initialRows: ProgressR
       current.map((row) => (row.resultId === resultId ? { ...row, [field]: value } : row)),
     );
     setSavedId(null);
+    setFeedback(null);
   }
 
   async function save(row: ProgressRow) {
     setSavingId(row.resultId);
     setSavedId(null);
-    const response = await fetch(`/api/progress/${row.resultId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ level: row.level, observation: row.observation ?? "" }),
-    }).catch(() => null);
-    setSavingId(null);
-    if (response?.ok) setSavedId(row.resultId);
+    setFeedback(null);
+    try {
+      const response = await fetch(`/api/progress/${row.resultId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level: row.level, observation: row.observation ?? "" }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (response.ok) {
+        setSavedId(row.resultId);
+        setFeedback({
+          kind: "success",
+          message: "El desempeño se actualizó y ya está disponible para la familia.",
+        });
+      } else {
+        setFeedback({
+          kind: "error",
+          message: body.error ?? "No se pudo actualizar el desempeño.",
+        });
+      }
+    } catch {
+      setFeedback({ kind: "error", message: "No se pudo conectar para guardar este cambio." });
+    } finally {
+      setSavingId(null);
+    }
   }
 
   if (!initialRows.length) return null;
   return (
     <section className="progress-manager">
       <div className="progress-manager__heading">
-        <div><p className="eyebrow">Evaluación</p><h2>Actualizar desempeño</h2><p>Los cambios se reflejan en los paneles del alumno y su familia.</p></div>
-        <label>Curso<select value={assignmentId} onChange={(event) => setAssignmentId(event.target.value)}>{courses.map((course) => <option value={course.assignmentId} key={course.assignmentId}>{course.subjectName} · {course.classroomName}</option>)}</select></label>
+        <div>
+          <p className="eyebrow">Evaluación</p>
+          <h2>Actualizar desempeño</h2>
+          <p>Los cambios se reflejan en los paneles del alumno y su familia.</p>
+        </div>
+        <label>
+          Curso
+          <select value={assignmentId} onChange={(event) => setAssignmentId(event.target.value)}>
+            {courses.map((course) => (
+              <option value={course.assignmentId} key={course.assignmentId}>
+                {course.subjectName} · {course.classroomName}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       <div className="progress-manager__list">
         {visible.map((row) => (
           <article key={row.resultId}>
-            <div className="student-initial">{row.studentFirstName[0]}{row.studentLastName[0]}</div>
-            <div className="progress-manager__student"><strong>{row.studentLastName}, {row.studentFirstName}</strong><span>{row.evaluationTitle}</span></div>
-            <select aria-label={`Nivel de ${row.studentFirstName}`} value={row.level} onChange={(event) => updateLocal(row.resultId, "level", event.target.value)}><option>AD</option><option>A</option><option>B</option><option>C</option></select>
-            <input aria-label={`Observación de ${row.studentFirstName}`} value={row.observation ?? ""} onChange={(event) => updateLocal(row.resultId, "observation", event.target.value)} placeholder="Observación breve" />
-            <button type="button" onClick={() => save(row)} disabled={savingId === row.resultId}>{savedId === row.resultId ? <Check /> : <Save />}{savingId === row.resultId ? "Guardando…" : savedId === row.resultId ? "Guardado" : "Guardar"}</button>
+            <div className="student-initial">
+              {row.studentFirstName[0]}
+              {row.studentLastName[0]}
+            </div>
+            <div className="progress-manager__student">
+              <strong>
+                {row.studentLastName}, {row.studentFirstName}
+              </strong>
+              <span>{row.evaluationTitle}</span>
+            </div>
+            <select
+              aria-label={`Nivel de ${row.studentFirstName}`}
+              value={row.level}
+              onChange={(event) => updateLocal(row.resultId, "level", event.target.value)}
+            >
+              <option>AD</option>
+              <option>A</option>
+              <option>B</option>
+              <option>C</option>
+            </select>
+            <input
+              aria-label={`Observación de ${row.studentFirstName}`}
+              value={row.observation ?? ""}
+              onChange={(event) => updateLocal(row.resultId, "observation", event.target.value)}
+              placeholder="Observación breve"
+            />
+            <button type="button" onClick={() => save(row)} disabled={savingId === row.resultId}>
+              {savedId === row.resultId ? <Check /> : <Save />}
+              {savingId === row.resultId
+                ? "Guardando…"
+                : savedId === row.resultId
+                  ? "Guardado"
+                  : "Guardar"}
+            </button>
           </article>
         ))}
       </div>
+      {feedback ? (
+        <p
+          className={`attendance-feedback ${feedback.kind}`}
+          role={feedback.kind === "error" ? "alert" : "status"}
+        >
+          {feedback.message}
+        </p>
+      ) : null}
     </section>
   );
 }

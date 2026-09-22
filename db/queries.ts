@@ -150,7 +150,7 @@ export async function getFamilyOverview(guardianId: string) {
           createdAt: alerts.createdAt,
         })
         .from(alerts)
-        .where(isNull(alerts.resolvedAt))
+        .where(and(inArray(alerts.studentId, childIds), isNull(alerts.resolvedAt)))
         .orderBy(desc(alerts.createdAt))
         .limit(8)
     : [];
@@ -219,7 +219,7 @@ export async function getFamilyOverview(guardianId: string) {
 
   return {
     children,
-    recentAlerts: recentAlerts.filter((alert) => childIds.includes(alert.studentId)),
+    recentAlerts,
     unreadMessages: unreadMessages[0]?.total ?? 0,
     recentAttendance,
     recentProgress,
@@ -257,7 +257,10 @@ export async function getStudentOverview(studentId: string) {
       .orderBy(desc(competencyResults.updatedAt))
       .limit(12),
     db
-      .select({ status: attendanceRecords.status, attendanceDate: attendanceRecords.attendanceDate })
+      .select({
+        status: attendanceRecords.status,
+        attendanceDate: attendanceRecords.attendanceDate,
+      })
       .from(attendanceRecords)
       .where(eq(attendanceRecords.studentId, studentId))
       .orderBy(desc(attendanceRecords.attendanceDate))
@@ -265,14 +268,19 @@ export async function getStudentOverview(studentId: string) {
   ]);
 
   const totalAttendance = recentAttendance.length;
-  const presentAttendance = recentAttendance.filter((record) => record.status === "presente").length;
+  const attendedClasses = recentAttendance.filter(
+    (record) => record.status === "presente" || record.status === "tardanza",
+  ).length;
   return {
     student: studentRows[0],
     progress,
     recentAttendance,
     statistics: {
-      attendanceRate: totalAttendance ? Math.round((presentAttendance / totalAttendance) * 100) : null,
-      achievedCompetencies: progress.filter((item) => item.level === "AD" || item.level === "A").length,
+      attendanceRate: totalAttendance
+        ? Math.round((attendedClasses / totalAttendance) * 100)
+        : null,
+      achievedCompetencies: progress.filter((item) => item.level === "AD" || item.level === "A")
+        .length,
     },
   };
 }
@@ -313,6 +321,7 @@ export async function getCourseCatalog(user: {
         section: classrooms.section,
         subjectName: subjects.name,
         subjectColor: subjects.color,
+        teacherId: users.id,
         teacherFirstName: users.firstName,
         teacherLastName: users.lastName,
       })
@@ -340,6 +349,7 @@ export async function getCourseCatalog(user: {
           section: classrooms.section,
           subjectName: subjects.name,
           subjectColor: subjects.color,
+          teacherId: users.id,
           teacherFirstName: users.firstName,
           teacherLastName: users.lastName,
         })
@@ -385,6 +395,7 @@ export async function getCourseCatalog(user: {
         subjectName: subjects.name,
         subjectColor: subjects.color,
         studentId: guardianStudents.studentId,
+        teacherId: users.id,
         teacherFirstName: users.firstName,
         teacherLastName: users.lastName,
       })
@@ -397,10 +408,7 @@ export async function getCourseCatalog(user: {
       .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
       .innerJoin(
         teacherAssignments,
-        and(
-          eq(teacherAssignments.classroomId, classrooms.id),
-          eq(teacherAssignments.active, true),
-        ),
+        and(eq(teacherAssignments.classroomId, classrooms.id), eq(teacherAssignments.active, true)),
       )
       .innerJoin(subjects, eq(subjects.id, teacherAssignments.subjectId))
       .innerJoin(users, eq(users.id, teacherAssignments.teacherId))
@@ -433,7 +441,9 @@ export async function getCourseCatalog(user: {
     .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
     .from(users)
     .where(childIds.length ? inArray(users.id, childIds) : eq(users.id, ""));
-  const names = new Map(studentNames.map((student) => [student.id, `${student.firstName} ${student.lastName}`]));
+  const names = new Map(
+    studentNames.map((student) => [student.id, `${student.firstName} ${student.lastName}`]),
+  );
 
   return rows.map((row) => ({
     ...row,
@@ -453,9 +463,7 @@ export async function getAdminOverview(institutionId: string) {
   const [classroomCount] = await db
     .select({ total: count() })
     .from(classrooms)
-    .where(
-      and(eq(classrooms.institutionId, institutionId), eq(classrooms.active, true)),
-    );
+    .where(and(eq(classrooms.institutionId, institutionId), eq(classrooms.active, true)));
   const [unreadNotifications] = await db
     .select({ total: count() })
     .from(notifications)
@@ -473,38 +481,51 @@ export async function getAdminManagement(institutionId: string) {
   const db = getDb();
   const [institutionRows, members, classroomOptions, studentOptions] = await Promise.all([
     db
-    .select({
-      id: institutions.id,
-      name: institutions.name,
-      modularCode: institutions.modularCode,
-      active: institutions.active,
-    })
-    .from(institutions)
-    .where(eq(institutions.id, institutionId))
-    .limit(1),
+      .select({
+        id: institutions.id,
+        name: institutions.name,
+        modularCode: institutions.modularCode,
+        active: institutions.active,
+      })
+      .from(institutions)
+      .where(eq(institutions.id, institutionId))
+      .limit(1),
     db
-    .select({
-      id: users.id,
-      email: users.email,
-      firstName: users.firstName,
-      lastName: users.lastName,
-      role: users.role,
-      active: users.active,
-      lastLoginAt: users.lastLoginAt,
-      createdAt: users.createdAt,
-    })
-    .from(users)
-    .where(eq(users.institutionId, institutionId))
-    .orderBy(users.lastName, users.firstName),
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        role: users.role,
+        active: users.active,
+        lastLoginAt: users.lastLoginAt,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.institutionId, institutionId))
+      .orderBy(users.lastName, users.firstName),
     db
       .select({ id: classrooms.id, name: classrooms.name })
       .from(classrooms)
       .where(and(eq(classrooms.institutionId, institutionId), eq(classrooms.active, true)))
       .orderBy(classrooms.name),
     db
-      .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+      .select({
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        classroomName: classrooms.name,
+      })
       .from(users)
-      .where(and(eq(users.institutionId, institutionId), eq(users.role, "estudiante"), eq(users.active, true)))
+      .leftJoin(enrollments, and(eq(enrollments.studentId, users.id), eq(enrollments.active, true)))
+      .leftJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
+      .where(
+        and(
+          eq(users.institutionId, institutionId),
+          eq(users.role, "estudiante"),
+          eq(users.active, true),
+        ),
+      )
       .orderBy(users.lastName, users.firstName),
   ]);
 
@@ -607,25 +628,30 @@ export async function getAllowedMessageRecipients(user: {
       .innerJoin(guardianStudents, eq(guardianStudents.studentId, enrollments.studentId))
       .innerJoin(users, eq(users.id, enrollments.studentId))
       .innerJoin(classrooms, eq(classrooms.id, teacherAssignments.classroomId))
-      .where(
-        and(
-          eq(teacherAssignments.teacherId, user.id),
-          eq(teacherAssignments.active, true),
-        ),
-      );
+      .where(and(eq(teacherAssignments.teacherId, user.id), eq(teacherAssignments.active, true)));
     const guardianIds = [...new Set(links.map((link) => link.guardianId))];
     if (!guardianIds.length) return [];
     const guardians = await db
-      .select({ id: users.id, firstName: users.firstName, lastName: users.lastName, role: users.role })
+      .select({
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        role: users.role,
+      })
       .from(users)
       .where(and(inArray(users.id, guardianIds), eq(users.active, true)));
-    const contextByGuardian = new Map(
-      links.map((link) => [
-        link.guardianId,
-        `Familiar de ${link.studentFirstName} ${link.studentLastName} · ${link.classroomName}`,
-      ]),
-    );
-    return guardians.map((guardian) => ({ ...guardian, context: contextByGuardian.get(guardian.id) }));
+    const contextByGuardian = new Map<string, string>();
+    for (const link of links) {
+      const context = `Familiar de ${link.studentFirstName} ${link.studentLastName} · ${link.classroomName}`;
+      const previous = contextByGuardian.get(link.guardianId);
+      if (!previous?.includes(context)) {
+        contextByGuardian.set(link.guardianId, previous ? `${previous} · ${context}` : context);
+      }
+    }
+    return guardians.map((guardian) => ({
+      ...guardian,
+      context: contextByGuardian.get(guardian.id),
+    }));
   }
 
   if (user.role === "estudiante") {
@@ -706,8 +732,18 @@ export async function getAllowedMessageRecipients(user: {
   );
 }
 
-function uniqueRecipients<T extends { id: string }>(items: T[]) {
-  return [...new Map(items.map((item) => [item.id, item])).values()];
+function uniqueRecipients<T extends { id: string; context?: string | null }>(items: T[]) {
+  const recipients = new Map<string, T>();
+  for (const item of items) {
+    const previous = recipients.get(item.id);
+    if (!previous) {
+      recipients.set(item.id, item);
+      continue;
+    }
+    const contexts = [...new Set([previous.context, item.context].filter(Boolean))].join(" · ");
+    recipients.set(item.id, { ...previous, context: contexts || null });
+  }
+  return [...recipients.values()];
 }
 
 export async function createAbsenceNotifications(
